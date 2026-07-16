@@ -69,3 +69,41 @@ func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (
 
 	return tag.RowsAffected() == 1, nil
 }
+
+func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, error) {
+	listCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	rows, err := pool.Query(
+		listCtx,
+		`
+			SELECT id, title, content_html, created_at
+			FROM entries
+			ORDER BY created_at DESC, id DESC
+			LIMIT 100
+		`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list entries: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]entry.Published, 0)
+	for rows.Next() {
+		var published entry.Published
+		if err := rows.Scan(
+			&published.ID,
+			&published.Title,
+			&published.ContentHTML,
+			&published.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan entry: %w", err)
+		}
+		entries = append(entries, published)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate entries: %w", err)
+	}
+
+	return entries, nil
+}
