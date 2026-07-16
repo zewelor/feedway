@@ -106,10 +106,10 @@ Sourcetap.
   - `feedway serve` i `feedway migrate`; brak komendy zwraca usage i kod 2;
   - testy konfiguracji i CLI.
 
-- [ ] **P5 — HTTP i reguły transportu**
+- [x] **P5 — HTTP i reguły transportu**
   - standardowe `net/http`, `/healthz`, proste błędy JSON i limit body;
   - Bearer auth wyłącznie dla POST;
-  - request ID, strukturalne logi i stałoczasowe porównanie tokenów;
+  - strukturalne logi i stałoczasowe porównanie tokenów;
   - graceful shutdown.
 
 - [ ] **P6 — PostgreSQL, migracje i readiness**

@@ -34,7 +34,7 @@ idiomatyczny dla Go i oparty głównie na bibliotece standardowej.
 - PostgreSQL 18.x i embedded migrations;
 - Bearer Token dla publikacji;
 - liveness, readiness i graceful shutdown;
-- request ID oraz strukturalne logi JSON;
+- strukturalne logi JSON;
 - ETag, Last-Modified, Cache-Control i conditional requests;
 - retencja, cleanup w batchach i advisory locks;
 - Docker Compose, distroless non-root, debug target i amd64/arm64;
@@ -301,12 +301,10 @@ Worker:
 
 ## 10. Logi i shutdown
 
-Logowanie używa `log/slog` w formacie JSON. Każdy request przyjmuje poprawny
-`X-Request-ID` albo otrzymuje wygenerowany identyfikator, zwracany w odpowiedzi.
-
-Logi obejmują metodę, route, status, czas, request ID, `external_id` i wynik
-publikacji. Nie obejmują Authorization, API_TOKEN, DATABASE_URL, request body ani
-pełnej treści wpisu.
+Logowanie używa `log/slog` w formacie JSON. Logi obejmują metodę, route, status,
+czas, `external_id` i wynik publikacji. Nie obejmują Authorization, API_TOKEN,
+DATABASE_URL, request body ani pełnej treści wpisu. Udane probe'y `GET /healthz`
+nie są logowane.
 
 Po SIGTERM lub SIGINT aplikacja kolejno:
 
@@ -356,7 +354,7 @@ Testy obejmują:
 - retencję, batche i advisory lock;
 - pusty feed, wpis bez tytułu, limit 100 i limit bajtów;
 - ETag, Last-Modified, 304 i HEAD;
-- auth, request ID, logi i graceful shutdown.
+- auth, logi i graceful shutdown.
 
 `just ci` wykonuje format check, race, integrację z PostgreSQL 18, vet,
 golangci-lint, govulncheck, `go mod verify`, kontrolę czystości modułu i build
