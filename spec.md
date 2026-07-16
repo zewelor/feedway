@@ -278,7 +278,7 @@ batchy, advisory locków ani konfiguracji.
 Logowanie używa `log/slog` w formacie JSON. Logi obejmują metodę, route, status,
 czas, `external_id` i wynik publikacji. Nie obejmują Authorization, API_TOKEN,
 DATABASE_URL, request body ani pełnej treści wpisu. Udane probe'y `GET /healthz`
-nie są logowane.
+i `GET /readyz` nie są logowane.
 
 Po SIGTERM lub SIGINT aplikacja kolejno:
 

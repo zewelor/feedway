@@ -7,9 +7,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
-	"github.com/zewelor/feedway/internal/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -18,24 +19,32 @@ const (
 	shutdownTimeout = 15 * time.Second
 )
 
-func Run(ctx context.Context, configuration config.Config, logger *slog.Logger) error {
+func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.Logger) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return fmt.Errorf("listen HTTP: %w", err)
 	}
 
+	readiness := &readiness{
+		database: pool,
+	}
 	server := &http.Server{
-		Handler:           newHandler(configuration.APIToken, logger),
+		Handler:           newHandler(apiToken, readiness, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	return serve(ctx, server, listener)
+	return serve(ctx, server, listener, readiness)
 }
 
-func serve(ctx context.Context, server *http.Server, listener net.Listener) error {
+func serve(
+	ctx context.Context,
+	server *http.Server,
+	listener net.Listener,
+	readiness *readiness,
+) error {
 	serverError := make(chan error, 1)
 	go func() {
 		serverError <- server.Serve(listener)
@@ -50,6 +59,8 @@ func serve(ctx context.Context, server *http.Server, listener net.Listener) erro
 	case <-ctx.Done():
 	}
 
+	readiness.isShuttingDown.Store(true)
+
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 	defer cancel()
 
@@ -63,4 +74,9 @@ func serve(ctx context.Context, server *http.Server, listener net.Listener) erro
 	}
 
 	return nil
+}
+
+type readiness struct {
+	database       databasePinger
+	isShuttingDown atomic.Bool
 }
