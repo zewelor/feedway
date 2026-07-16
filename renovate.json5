@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests",
+  ],
+  "enabledManagers": [
+    "docker-compose",
+    "dockerfile",
+    "github-actions",
+    "gomod",
+  ],
+  "dependencyDashboard": true,
+  "ignorePaths": [".agents/**"],
+  "postUpdateOptions": ["gomodTidy"],
+  "packageRules": [
+    {
+      "description": "Keep PostgreSQL on major version 18",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["postgres"],
+      "allowedVersions": "/^18(?:\\.|$)/",
+    },
+    {
+      "description": "Automerge non-major Go and Docker updates",
+      "matchManagers": ["docker-compose", "dockerfile", "gomod"],
+      "matchUpdateTypes": ["digest", "minor", "patch", "pin"],
+      "automerge": true,
+    },
+    {
+      "description": "Automerge all GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "automerge": true,
+    },
+  ],
+}
