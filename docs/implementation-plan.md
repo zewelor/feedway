@@ -133,7 +133,7 @@ Sourcetap.
 
 ## Publikacja i operacyjność
 
-- [x] **P9 — JSON Feed 1.1**
+- [ ] **P9 — JSON Feed 1.1**
   - hardcoded `title: Feedway`, brak opisu, `home_page_url` i `feed_url`;
   - wygenerowany SHA-256 jako publiczne `item.id`;
   - wyłącznie `content_html`, opcjonalny tytuł i daty z bazy;
