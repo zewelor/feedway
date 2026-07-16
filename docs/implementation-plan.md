@@ -100,11 +100,11 @@ Sourcetap.
 
 ## Aplikacja
 
-- [ ] **P4 — konfiguracja, build info i CLI**
+- [x] **P4 — konfiguracja i CLI**
   - tylko `DATABASE_URL`, `API_TOKEN` i `MIGRATIONS_MODE`;
   - pozostałe wartości jako hardcoded conventions;
   - `feedway serve` i `feedway migrate`; brak komendy zwraca usage i kod 2;
-  - `/version` i testy konfiguracji/CLI.
+  - testy konfiguracji i CLI.
 
 - [ ] **P5 — HTTP i reguły transportu**
   - standardowe `net/http`, `/healthz`, proste błędy JSON i limit body;

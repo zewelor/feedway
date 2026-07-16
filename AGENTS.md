@@ -92,6 +92,10 @@ npx skills update -p -y
 - `just test` is the acceptance gate for every implementation package.
 - Use the narrower `just test-unit` and `just test-integration` only while
   iterating; use `just ci` for the complete local CI surface.
+- After changing the file layout, and especially after adding a file or
+  directory at the repository root, run `just test_dockerignore`. Review the
+  dry-run output and update `.dockerignore` when a file is not required in the
+  Docker build context.
 - For automated inspection, use non-paging Git commands such as
   `git --no-pager diff --staged`, `git --no-pager diff --stat`, and
   `git --no-pager show --stat`. Do not globally override `GIT_PAGER`.

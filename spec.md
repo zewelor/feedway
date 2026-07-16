@@ -33,7 +33,7 @@ idiomatyczny dla Go i oparty głównie na bibliotece standardowej.
 - bezpieczny, sanitizowany `content_html`;
 - PostgreSQL 18.x i embedded migrations;
 - Bearer Token dla publikacji;
-- liveness, readiness, version i graceful shutdown;
+- liveness, readiness i graceful shutdown;
 - request ID oraz strukturalne logi JSON;
 - ETag, Last-Modified, Cache-Control i conditional requests;
 - retencja, cleanup w batchach i advisory locks;
@@ -131,8 +131,6 @@ pól o wartości `null`.
 - `GET /healthz` — liveness bez odpytywania bazy;
 - `GET /readyz` — inicjalizacja, dokładna wersja schematu, ping PostgreSQL z
   krótkim timeoutem i stan shutdownu;
-- `GET /version` — wersja, commit, data buildu i wersja Go.
-
 Serwer używa standardowego `net/http`. MVP nie zawiera Chi, Huma, OpenAPI ani
 Swagger UI.
 
