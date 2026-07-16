@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:18.4-trixie@sha256:c2d42a104eb6b37b286a2d9c5cf83f349de4d6516d513d00a2bd9610e2c2e5e4
+    environment:
+      POSTGRES_DB: feedway_test
+      POSTGRES_PASSWORD: feedway_test
+      POSTGRES_USER: feedway
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedway -d feedway_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://feedway:feedway_test@postgres:5432/feedway_test
+      GOCACHE: /tmp/go-build
+    read_only: true
+    tmpfs:
+      - /tmp:exec,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
