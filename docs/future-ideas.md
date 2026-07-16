@@ -24,9 +24,8 @@ minimalnego kryterium odbioru.
 
 ## Alternatywna tożsamość i treść
 
-- opcjonalne `external_id`;
-- automatyczna deduplikacja treści i wersjonowany hash;
-- generowane UUID wpisów;
+- identyfikatory podawane przez klienta i aktualizacja istniejących wpisów;
+- UUIDv7 generowane przez PostgreSQL zamiast deterministycznego hasha;
 - osobne `content_text`;
 - top-level `url` wpisu;
 - podawane przez klienta `published_at`;

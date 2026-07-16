@@ -22,9 +22,9 @@ wymagać jawnej zmiany kontraktu.
 
 - jeden hardcoded feed `Feedway` pod `/feed.json`;
 - tylko `POST /api/v1/entries`, `GET`/`HEAD /feed.json` i endpointy operacyjne;
-- wymagane `external_id` jest primary key i publicznym JSON Feed `item.id`;
-- wymagane `content_html`, opcjonalny `title`;
-- bez UUID, hasha, deduplikacji treści, cursorów i management API;
+- automatyczny SHA-256 finalnej treści jest primary key i JSON Feed `item.id`;
+- wymagane `content_html`, opcjonalny `title`, bez identyfikatora w request;
+- bez UUID, aktualizacji wpisów, cursorów i management API;
 - `net/http`, bez Chi, Huma, OpenAPI i Swagger UI;
 - konfiguracja: tylko `DATABASE_URL` i `API_TOKEN`;
 - operacyjność, skille, CI i ręczny odbiór pozostają w MVP.
@@ -78,7 +78,7 @@ Sourcetap.
 - [x] **P0 — specyfikacja i kontrakt pracy**
   - dodać plan, `AGENTS.md` i niebacklogowy `docs/future-ideas.md`;
   - zapisać workflow review-before-commit, KISS i convention over configuration;
-  - ograniczyć produkt do jednego hardcoded feeda i wymaganego `external_id`;
+  - ograniczyć produkt do jednego hardcoded feeda;
   - pierwszy commit obejmuje zastany `spec.md`.
 
 - [x] **P1 — skille**
@@ -114,27 +114,28 @@ Sourcetap.
 
 - [x] **P6 — PostgreSQL, migracje i readiness**
   - `pgxpool` i embedded schema jednej tabeli `entries`;
-  - `external_id text PRIMARY KEY`, bez UUID i hashy;
+  - `id text PRIMARY KEY` dla SHA-256, bez UUID i `updated_at`;
   - automatyczne, idempotentne przygotowanie schematu przed startem HTTP;
   - `/readyz`, timeouty, lifecycle poola i testy awarii/shutdownu.
 
-- [ ] **P7 — sanitizacja HTML**
+- [x] **P7 — normalizacja, hash i sanitizacja HTML**
   - normalizacja CR/LF i whitespace;
   - niezmodyfikowane `bluemonday.UGCPolicy`;
-  - testy bezpieczeństwa, limitów i pustego wyniku.
+  - wersjonowany SHA-256 finalnego `title` i `content_html`;
+  - testy bezpieczeństwa, deterministyczności, limitów i pustego wyniku.
 
-- [ ] **P8 — atomowy upsert**
-  - `POST /api/v1/entries` z wymaganymi `external_id` i `content_html`;
+- [ ] **P8 — atomowy insert i deduplikacja**
+  - `POST /api/v1/entries` z wymaganym `content_html`;
   - opcjonalny `title`;
-  - pojedynczy `INSERT ... ON CONFLICT DO UPDATE`;
-  - wyniki `created`, `updated` i `unchanged`;
-  - zachowanie `created_at` i testy równoległych publikacji.
+  - pojedynczy `INSERT ... ON CONFLICT DO NOTHING`;
+  - wyniki `created` i `deduplicated`;
+  - testy równoległych publikacji tej samej treści.
 
 ## Publikacja i operacyjność
 
 - [ ] **P9 — JSON Feed 1.1**
   - hardcoded `title: Feedway`, brak opisu, `home_page_url` i `feed_url`;
-  - `external_id` jako publiczne `item.id`;
+  - wygenerowany SHA-256 jako publiczne `item.id`;
   - wyłącznie `content_html`, opcjonalny tytuł i daty z bazy;
   - hardcoded limit 100 najnowszych wpisów.
 
@@ -163,6 +164,6 @@ Sourcetap.
 
 - [ ] **P14 — dokumentacja i odbiór**
   - README: Compose, curl, n8n, backup, upgrade i troubleshooting;
-  - smoke z aktualnym Miniflux: `/feed.json`, upsert, ETag i 304;
+  - smoke z aktualnym Miniflux: `/feed.json`, deduplikacja, ETag i 304;
   - po odbiorze przygotować ręczne `v0.1.0`;
   - automatyzacja release, SBOM, skan i podpisywanie są poza MVP.

@@ -27,7 +27,7 @@ idiomatyczny dla Go i oparty głównie na bibliotece standardowej.
 
 ## 2. Zakres MVP
 
-- `POST /api/v1/entries` z atomowym upsertem przez wymagane `external_id`;
+- `POST /api/v1/entries` z automatyczną deduplikacją finalnej treści;
 - `GET` i `HEAD /feed.json` jako JSON Feed 1.1;
 - hardcoded limit 100 najnowszych wpisów;
 - bezpieczny, sanitizowany `content_html`;
@@ -50,7 +50,6 @@ Request publikacji:
 
 ```json
 {
-  "external_id": "github-monitor:2026-07-15",
   "title": "Daily report",
   "content_html": "<p>New releases are available.</p>"
 }
@@ -58,28 +57,23 @@ Request publikacji:
 
 Pola:
 
-- `external_id` — wymagany, nieprzezroczysty, case-sensitive string, 1–512
-  znaków po obcięciu białych znaków;
 - `content_html` — wymagany fragment HTML, maksymalnie 256 KiB przed i po
   sanitizacji;
 - `title` — opcjonalny zwykły tekst, maksymalnie 1000 znaków.
 
-`external_id` jest jedyną tożsamością wpisu:
+Klient nie podaje identyfikatora. Po normalizacji i sanitizacji aplikacja
+oblicza wersjonowany SHA-256 z finalnego `title` i `content_html`. Wynik w
+formacie `sha256-v1:<hex>` jest primary key w PostgreSQL i publicznym JSON Feed
+`item.id`.
 
-- stanowi primary key w PostgreSQL;
-- jest publikowany bez zmian jako JSON Feed `item.id`;
-- ponowny request aktualizuje ten sam wpis;
-- nie generujemy UUID i nie obliczamy hasha deduplikacyjnego.
-
-Pierwszy request ustawia `created_at` i `updated_at`. Upsert zachowuje
-`created_at`, zastępuje `title` oraz `content_html` i zmienia `updated_at` tylko,
-gdy finalna treść rzeczywiście się zmieniła.
+Identyczna finalna treść ma zawsze ten sam identyfikator i nie tworzy kolejnego
+wpisu. Zmieniony tytuł albo HTML tworzy nowy, niezmienny wpis. Nie generujemy
+UUID i nie aktualizujemy istniejących wpisów.
 
 Możliwe wyniki:
 
 - `created` — HTTP 201;
-- `updated` — HTTP 200;
-- `unchanged` — HTTP 200, bez zmiany `updated_at`.
+- `deduplicated` — HTTP 200.
 
 ## 4. HTTP API
 
@@ -167,7 +161,8 @@ Kolejność publikacji:
 4. zamiana pustego `title` na `NULL`;
 5. sanitizacja HTML;
 6. sprawdzenie, czy `content_html` pozostał niepusty;
-7. atomowy upsert w PostgreSQL.
+7. obliczenie wersjonowanego SHA-256 finalnego tytułu i HTML;
+8. atomowy insert z deduplikacją w PostgreSQL.
 
 Nie zwijamy białych znaków wewnątrz treści i nie kanonikalizujemy DOM.
 
@@ -183,14 +178,13 @@ Jedyna tabela domenowa:
 
 ```sql
 CREATE TABLE entries (
-    external_id text PRIMARY KEY,
+    id           text PRIMARY KEY,
     title        text,
     content_html text NOT NULL,
     created_at   timestamptz NOT NULL DEFAULT now(),
-    updated_at   timestamptz NOT NULL DEFAULT now(),
 
-    CONSTRAINT entries_external_id_valid CHECK (
-        char_length(btrim(external_id)) BETWEEN 1 AND 512
+    CONSTRAINT entries_id_valid CHECK (
+        id ~ '^sha256-v1:[0-9a-f]{64}$'
     ),
     CONSTRAINT entries_title_length CHECK (
         title IS NULL OR char_length(title) <= 1000
@@ -202,11 +196,11 @@ CREATE TABLE entries (
 );
 
 CREATE INDEX entries_created_index
-    ON entries(created_at DESC, external_id DESC);
+    ON entries(created_at DESC, id DESC);
 ```
 
-Publikacja używa pojedynczego `INSERT ... ON CONFLICT ... DO UPDATE` z warunkiem
-pomijającym update identycznej treści. Nie wykonuje wcześniejszego SELECT-a.
+Publikacja używa pojedynczego `INSERT ... ON CONFLICT DO NOTHING`. Nie wykonuje
+wcześniejszego SELECT-a.
 
 Schemat jednej tabeli jest osadzony przez `embed` i stosowany automatycznie
 przed rozpoczęciem nasłuchiwania. MVP nie ma osobnej komendy migracji, trybów
@@ -215,22 +209,20 @@ migracji ani zależności od frameworka migracyjnego.
 ## 7. JSON Feed i cache
 
 Feed publikuje 100 najnowszych wpisów według
-`created_at DESC, external_id DESC`.
+`created_at DESC, id DESC`.
 
 Item:
 
 ```json
 {
-  "id": "github-monitor:2026-07-15",
+  "id": "sha256-v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "title": "Daily report",
   "content_html": "<p>New releases are available.</p>",
-  "date_published": "2026-07-15T08:00:00Z",
-  "date_modified": "2026-07-15T09:00:00Z"
+  "date_published": "2026-07-15T08:00:00Z"
 }
 ```
 
-`title` jest pomijany, gdy go nie ma. `date_published` odpowiada `created_at`, a
-`date_modified` — `updated_at`.
+`title` jest pomijany, gdy go nie ma. `date_published` odpowiada `created_at`.
 
 Finalny, nieskompresowany JSON ma hardcoded limit 1 MiB. Przekroczenie zwraca
 422; aplikacja nie publikuje cicho obciętej reprezentacji.
@@ -276,7 +268,7 @@ batchy, advisory locków ani konfiguracji.
 ## 10. Logi i shutdown
 
 Logowanie używa `log/slog` w formacie JSON. Logi obejmują metodę, route, status,
-czas, `external_id` i wynik publikacji. Nie obejmują Authorization, API_TOKEN,
+czas, wygenerowane `id` i wynik publikacji. Nie obejmują Authorization, API_TOKEN,
 DATABASE_URL, request body ani pełnej treści wpisu. Udane probe'y `GET /healthz`
 i `GET /readyz` nie są logowane.
 
@@ -316,8 +308,8 @@ Testy obejmują:
 
 - konfigurację i transport HTTP;
 - normalizację i sanitizację HTML;
-- atomowy upsert, `created`, `updated` i `unchanged`;
-- równoległe upserty tego samego `external_id`;
+- deterministyczny hash, `created` i `deduplicated`;
+- równoległe publikacje tej samej treści;
 - automatyczne przygotowanie schematu i readiness;
 - retencję;
 - pusty feed, wpis bez tytułu, limit 100 i limit bajtów;
@@ -344,7 +336,7 @@ MVP jest gotowe, gdy użytkownik może:
 1. uruchomić Feedway i PostgreSQL przez Docker Compose;
 2. opublikować sanitizowany HTML przez `POST /api/v1/entries`;
 3. dodać publiczny adres `/feed.json` do aktualnego Miniflux;
-4. zaktualizować wpis przez `external_id` bez utworzenia duplikatu;
+4. ponowić publikację tej samej treści bez utworzenia duplikatu;
 5. otrzymać stabilny ETag i 304;
 6. potwierdzić health, readiness, retencję i graceful shutdown;
 7. wykonać backup i upgrade według README.
