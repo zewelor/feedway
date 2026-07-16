@@ -24,12 +24,21 @@ and DHH style of providing one coherent, opinionated path:
   a concrete current requirement needs it;
 - delete speculative flexibility instead of preserving it for hypothetical
   future use;
+- prefer idempotent operations and caller retries over in-process retry loops;
+  add retry, backoff, or a retry dependency only for a concrete observed
+  transient failure with a tested policy;
+- during self-review, remove response fields, validation branches, and tests
+  that do not protect the current contract;
 - grow the product incrementally from observed needs, changing the contract in
   a reviewed implementation package.
 
 Do not copy Rails architecture into Go. Apply the product-design principle:
 small public surface, strong conventions, direct code, and few decisions for
 the operator.
+
+Before the first release, prefer rebuilding ephemeral development and test
+databases over adding compatibility migrations for unreleased schemas. Once
+persistent user data exists, schema changes require an explicit migration.
 
 ## Package workflow
 

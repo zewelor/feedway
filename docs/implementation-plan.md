@@ -124,10 +124,10 @@ Sourcetap.
   - wersjonowany SHA-256 finalnego `title` i `content_html`;
   - testy bezpieczeństwa, deterministyczności, limitów i pustego wyniku.
 
-- [ ] **P8 — atomowy insert i deduplikacja**
+- [x] **P8 — atomowy insert i deduplikacja**
   - `POST /api/v1/entries` z wymaganym `content_html`;
   - opcjonalny `title`;
-  - pojedynczy `INSERT ... ON CONFLICT DO NOTHING`;
+  - pojedynczy `INSERT ... ON CONFLICT (id) DO NOTHING`;
   - wyniki `created` i `deduplicated`;
   - testy równoległych publikacji tej samej treści.
 

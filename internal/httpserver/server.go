@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/zewelor/feedway/internal/database"
+	"github.com/zewelor/feedway/internal/entry"
 )
 
 const (
@@ -29,7 +31,14 @@ func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.
 		database: pool,
 	}
 	server := &http.Server{
-		Handler:           newHandler(apiToken, readiness, logger),
+		Handler: newHandler(
+			apiToken,
+			readiness,
+			func(ctx context.Context, values entry.Values) (bool, error) {
+				return database.InsertEntry(ctx, pool, values)
+			},
+			logger,
+		),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
