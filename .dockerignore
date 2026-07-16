@@ -1,0 +1,8 @@
+.git
+.agents
+.codex
+.pre-commit-config.yaml
+AGENTS.md
+docs
+skills-lock.json
+spec.md

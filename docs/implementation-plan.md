@@ -86,7 +86,7 @@ Sourcetap.
   - sprawdzić katalogi, lock i `npx skills list --json`;
   - wykluczyć `.agents/` z narzędzi modyfikujących pliki.
 
-- [ ] **P2 — dockerowe testy**
+- [x] **P2 — dockerowe testy**
   - moduł Go, `Justfile`, `.dockerignore`, testowy Dockerfile i
     `compose.test.yaml`;
   - najnowsze stabilne Go 1.26.x i PostgreSQL 18.x z digestami;

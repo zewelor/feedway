@@ -1,0 +1,7 @@
+FROM golang:1.26.5-trixie
+
+WORKDIR /src
+
+COPY . .
+
+CMD ["go", "test", "-race", "-tags=integration", "./..."]
