@@ -44,10 +44,19 @@ minimalnego kryterium odbioru.
 ## Operacyjność na późniejsze potrzeby
 
 - metryki Prometheus;
+- osobna komenda migracji i wersjonowane migracje, gdy pojawi się druga zmiana
+  schematu;
+- tryby migracji i kontrola oczekiwanej wersji schematu;
+- batchowana retencja i advisory lock, gdy skala danych lub liczba replik tego
+  wymaga;
+- `Last-Modified` i `If-Modified-Since`;
+- własna rozszerzona polityka sanitizacji HTML;
 - webhooki wychodzące, kolejki i Redis;
 - pełnotekstowe wyszukiwanie;
 - proxy obrazów;
 - manifesty Kubernetes;
+- debug target obrazu;
+- automatyzacja release, SBOM, skanowanie i podpisywanie obrazów;
 - wiele tokenów, użytkownicy, role i uprawnienia;
 - konfigurowanie obecnych hardcoded konwencji, ale tylko gdy realne wdrożenie
   wymaga innej wartości.
