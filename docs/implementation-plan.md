@@ -93,7 +93,7 @@ Sourcetap.
   - `just test` uruchamia wszystkie testy z `-race` i zawsze sprząta Compose;
   - `just test-unit`, `just test-integration` i `just ci`.
 
-- [ ] **P3 — Renovate**
+- [x] **P3 — Renovate**
   - dodać i zwalidować `renovate.json5`;
   - wdrożyć opisaną politykę;
   - `renovate-config-validator --strict`.
