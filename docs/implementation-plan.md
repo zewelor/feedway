@@ -146,10 +146,11 @@ Sourcetap.
   - 422 po przekroczeniu hardcoded 1 MiB;
   - testy pustego feeda, 304, HEAD i granic bajtów.
 
-- [ ] **P11 — retencja**
-  - jedno idempotentne kasowanie po `created_at` starszym niż 30 dni;
+- [x] **P11 — retencja**
+  - jedno idempotentne kasowanie po `created_at`, domyślnie starszym niż 60 dni;
+  - opcjonalne `RETENTION_DAYS` jako dodatnia liczba całkowita;
   - cleanup po starcie, co 24h i bezpieczny shutdown;
-  - bez batchy, advisory locków i konfiguracji.
+  - bez batchy, advisory locków i pozostałej konfiguracji.
 
 - [ ] **P12 — obraz i Compose**
   - statyczny distroless non-root i PostgreSQL 18;

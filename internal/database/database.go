@@ -107,3 +107,18 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, er
 
 	return entries, nil
 }
+
+func DeleteExpiredEntries(ctx context.Context, pool *pgxpool.Pool, retentionDays int) error {
+	deleteCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	if _, err := pool.Exec(
+		deleteCtx,
+		"DELETE FROM entries WHERE created_at < now() - $1 * interval '1 day'",
+		retentionDays,
+	); err != nil {
+		return fmt.Errorf("delete expired entries: %w", err)
+	}
+
+	return nil
+}

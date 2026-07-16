@@ -203,3 +203,60 @@ func TestListEntriesReturnsNewestHundred(t *testing.T) {
 		t.Errorf("last ID = %q, want %q", entries[99].ID, wantLastID)
 	}
 }
+
+func TestDeleteExpiredEntries(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Fatal("DATABASE_URL is required")
+	}
+
+	pool, err := Open(t.Context(), databaseURL)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	if err := Prepare(t.Context(), pool); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), "TRUNCATE entries"); err != nil {
+		t.Fatalf("truncate entries: %v", err)
+	}
+	if _, err := pool.Exec(
+		t.Context(),
+		`
+			INSERT INTO entries (id, content_html, created_at)
+			VALUES
+				('sha256-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+					'<p>expired</p>', now() - interval '61 days'),
+				('sha256-v1:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+					'<p>retained</p>', now() - interval '59 days')
+		`,
+	); err != nil {
+		t.Fatalf("insert entries: %v", err)
+	}
+
+	if err := DeleteExpiredEntries(t.Context(), pool, 60); err != nil {
+		t.Fatalf("first DeleteExpiredEntries() error = %v", err)
+	}
+	if err := DeleteExpiredEntries(t.Context(), pool, 60); err != nil {
+		t.Fatalf("second DeleteExpiredEntries() error = %v", err)
+	}
+
+	var (
+		count       int
+		contentHTML string
+	)
+	if err := pool.QueryRow(
+		t.Context(),
+		"SELECT count(*), min(content_html) FROM entries",
+	).Scan(&count, &contentHTML); err != nil {
+		t.Fatalf("query retained entries: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("entry count = %d, want 1", count)
+	}
+	if contentHTML != "<p>retained</p>" {
+		t.Errorf("content_html = %q, want retained entry", contentHTML)
+	}
+}
