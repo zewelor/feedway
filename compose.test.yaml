@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgres://feedway:feedway_test@postgres:5432/feedway_test
       GOCACHE: /tmp/go-build
+      GOMODCACHE: /tmp/go-mod
     read_only: true
     tmpfs:
       - /tmp:exec,mode=1777

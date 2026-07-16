@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,14 +11,22 @@ import (
 	"time"
 )
 
+const readinessTimeout = 2 * time.Second
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func newHandler(apiToken string, logger *slog.Logger) http.Handler {
+type databasePinger interface {
+	Ping(context.Context) error
+}
+
+func newHandler(apiToken string, readiness *readiness, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
 	mux.HandleFunc("/healthz", methodNotAllowed)
+	mux.HandleFunc("GET /readyz", readiness.handle)
+	mux.HandleFunc("/readyz", methodNotAllowed)
 	mux.Handle("POST /api/v1/entries", authenticate(
 		apiToken,
 		requireJSON(http.HandlerFunc(entries)),
@@ -30,6 +39,27 @@ func newHandler(apiToken string, logger *slog.Logger) http.Handler {
 
 func health(response http.ResponseWriter, _ *http.Request) {
 	response.WriteHeader(http.StatusOK)
+}
+
+func (r *readiness) handle(response http.ResponseWriter, request *http.Request) {
+	if r.isShuttingDown.Load() {
+		writeError(response, http.StatusServiceUnavailable, "not ready")
+		return
+	}
+
+	if err := pingDatabase(request.Context(), r.database, readinessTimeout); err != nil {
+		writeError(response, http.StatusServiceUnavailable, "not ready")
+		return
+	}
+
+	response.WriteHeader(http.StatusOK)
+}
+
+func pingDatabase(ctx context.Context, database databasePinger, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	return database.Ping(ctx)
 }
 
 func methodNotAllowed(response http.ResponseWriter, _ *http.Request) {
@@ -92,7 +122,9 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 
 		next.ServeHTTP(recorder, request)
 
-		if request.Pattern == "GET /healthz" && recorder.status == http.StatusOK {
+		isSuccessfulProbe := recorder.status == http.StatusOK &&
+			(request.Pattern == "GET /healthz" || request.Pattern == "GET /readyz")
+		if isSuccessfulProbe {
 			return
 		}
 

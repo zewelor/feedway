@@ -112,7 +112,7 @@ Sourcetap.
   - strukturalne logi i stałoczasowe porównanie tokenów;
   - graceful shutdown.
 
-- [ ] **P6 — PostgreSQL, migracje i readiness**
+- [x] **P6 — PostgreSQL, migracje i readiness**
   - `pgxpool` i embedded schema jednej tabeli `entries`;
   - `external_id text PRIMARY KEY`, bez UUID i hashy;
   - automatyczne, idempotentne przygotowanie schematu przed startem HTTP;

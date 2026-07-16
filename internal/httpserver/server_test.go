@@ -23,9 +23,12 @@ func TestServeShutsDownWhenContextIsCancelled(t *testing.T) {
 			response.WriteHeader(http.StatusOK)
 		}),
 	}
+	readiness := &readiness{
+		database: pinger{},
+	}
 	result := make(chan error, 1)
 	go func() {
-		result <- serve(ctx, server, listener)
+		result <- serve(ctx, server, listener, readiness)
 	}()
 
 	client := &http.Client{Timeout: time.Second}
@@ -46,6 +49,9 @@ func TestServeShutsDownWhenContextIsCancelled(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("serve did not stop")
+	}
+	if !readiness.isShuttingDown.Load() {
+		t.Fatal("readiness was not disabled")
 	}
 
 	if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {

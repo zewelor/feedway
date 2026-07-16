@@ -2,13 +2,16 @@ package httpserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testAPIToken = "01234567890123456789012345678901"
@@ -112,8 +115,11 @@ func TestHandler(t *testing.T) {
 			response := httptest.NewRecorder()
 			var logs bytes.Buffer
 			logger := slog.New(slog.NewJSONHandler(&logs, nil))
+			readiness := &readiness{
+				database: pinger{},
+			}
 
-			newHandler(testAPIToken, logger).ServeHTTP(response, request)
+			newHandler(testAPIToken, readiness, logger).ServeHTTP(response, request)
 
 			if response.Code != test.expectedStatus {
 				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
@@ -153,9 +159,97 @@ func TestHandlerResponseBodyIsBoundedAtLimit(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newHandler(testAPIToken, slog.New(slog.NewTextHandler(io.Discard, nil))).ServeHTTP(response, request)
+	readiness := &readiness{
+		database: pinger{},
+	}
+	newHandler(
+		testAPIToken,
+		readiness,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNotImplemented {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotImplemented)
 	}
+}
+
+func TestReadiness(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		databaseError  error
+		isShuttingDown bool
+		expectedStatus int
+		expectLog      bool
+	}{
+		{
+			name:           "ready",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "database unavailable",
+			databaseError:  errors.New("database unavailable"),
+			expectedStatus: http.StatusServiceUnavailable,
+			expectLog:      true,
+		},
+		{
+			name:           "shutting down",
+			isShuttingDown: true,
+			expectedStatus: http.StatusServiceUnavailable,
+			expectLog:      true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			readiness := &readiness{
+				database: pinger{err: test.databaseError},
+			}
+			readiness.isShuttingDown.Store(test.isShuttingDown)
+			var logs bytes.Buffer
+			request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+			response := httptest.NewRecorder()
+
+			newHandler(
+				testAPIToken,
+				readiness,
+				slog.New(slog.NewJSONHandler(&logs, nil)),
+			).ServeHTTP(response, request)
+
+			if response.Code != test.expectedStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
+			}
+			if test.expectLog && logs.Len() == 0 {
+				t.Fatal("access log is empty")
+			}
+			if !test.expectLog && logs.Len() != 0 {
+				t.Fatalf("logs = %q, want no access log", logs.String())
+			}
+		})
+	}
+}
+
+func TestPingDatabaseTimeout(t *testing.T) {
+	t.Parallel()
+
+	err := pingDatabase(t.Context(), pinger{waitForContext: true}, time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("pingDatabase() error = %v, want context deadline exceeded", err)
+	}
+}
+
+type pinger struct {
+	err            error
+	waitForContext bool
+}
+
+func (p pinger) Ping(ctx context.Context) error {
+	if p.waitForContext {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return p.err
 }
