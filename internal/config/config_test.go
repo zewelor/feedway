@@ -15,28 +15,14 @@ func TestLoad(t *testing.T) {
 		expectedError string
 	}{
 		{
-			name: "valid defaults",
+			name: "valid configuration",
 			environment: map[string]string{
 				"DATABASE_URL": "postgres://feedway:secret@postgres/feedway",
 				"API_TOKEN":    strings.Repeat("a", 32),
 			},
 			expected: Config{
-				DatabaseURL:    "postgres://feedway:secret@postgres/feedway",
-				APIToken:       strings.Repeat("a", 32),
-				MigrationsMode: MigrationsAuto,
-			},
-		},
-		{
-			name: "migrations off",
-			environment: map[string]string{
-				"DATABASE_URL":    "postgresql://feedway:secret@postgres/feedway",
-				"API_TOKEN":       strings.Repeat("a", 32),
-				"MIGRATIONS_MODE": MigrationsOff,
-			},
-			expected: Config{
-				DatabaseURL:    "postgresql://feedway:secret@postgres/feedway",
-				APIToken:       strings.Repeat("a", 32),
-				MigrationsMode: MigrationsOff,
+				DatabaseURL: "postgres://feedway:secret@postgres/feedway",
+				APIToken:    strings.Repeat("a", 32),
 			},
 		},
 		{
@@ -75,15 +61,6 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":    strings.Repeat("a", 31),
 			},
 			expectedError: "API_TOKEN must be at least 32 bytes",
-		},
-		{
-			name: "migrations mode invalid",
-			environment: map[string]string{
-				"DATABASE_URL":    "postgres://postgres/feedway",
-				"API_TOKEN":       strings.Repeat("a", 32),
-				"MIGRATIONS_MODE": "manual",
-			},
-			expectedError: `MIGRATIONS_MODE must be "auto" or "off"`,
 		},
 	}
 
