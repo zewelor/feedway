@@ -139,9 +139,9 @@ pól o wartości `null`.
 Serwer używa standardowego `net/http`. MVP nie zawiera Chi, Huma, OpenAPI ani
 Swagger UI.
 
-### 4.4. Błędy
+### 4.4. Błędy aplikacyjne
 
-Błędy mają prostą, stabilną odpowiedź JSON:
+Błędy aplikacyjne mają prostą, stabilną odpowiedź JSON:
 
 ```json
 {
@@ -158,6 +158,9 @@ Statusy:
 - 422 — nieprawidłowe dane lub zbyt duża reprezentacja feeda;
 - 500 — nieoczekiwany błąd;
 - 503 — baza albo aplikacja nie jest gotowa.
+
+Nieznane ścieżki i niedozwolone metody pozostają standardowymi odpowiedziami
+404 i 405 z `net/http`.
 
 Błąd nie ujawnia SQL, nazw constraintów, konfiguracji, sekretów ani stack trace.
 

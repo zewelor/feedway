@@ -139,7 +139,7 @@ Sourcetap.
   - wyłącznie `content_html`, opcjonalny tytuł i daty z bazy;
   - hardcoded limit 100 najnowszych wpisów.
 
-- [ ] **P10 — publiczny endpoint i cache**
+- [x] **P10 — publiczny endpoint i cache**
   - tylko `GET` i `HEAD /feed.json`;
   - `application/feed+json; charset=utf-8`;
   - ETag, Cache-Control i `If-None-Match`;

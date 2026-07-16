@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zewelor/feedway/internal/database"
 	"github.com/zewelor/feedway/internal/entry"
+	"github.com/zewelor/feedway/internal/jsonfeed"
 )
 
 const (
@@ -36,6 +37,13 @@ func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.
 			readiness,
 			func(ctx context.Context, values entry.Values) (bool, error) {
 				return database.InsertEntry(ctx, pool, values)
+			},
+			func(ctx context.Context) ([]byte, error) {
+				entries, err := database.ListEntries(ctx, pool)
+				if err != nil {
+					return nil, err
+				}
+				return jsonfeed.Marshal(entries)
 			},
 			logger,
 		),

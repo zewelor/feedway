@@ -22,6 +22,9 @@ and DHH style of providing one coherent, opinionated path:
   between deployment environments;
 - add an option, abstraction, interface, fallback, or extension point only when
   a concrete current requirement needs it;
+- rely on standard-library behavior before adding custom fallback handlers;
+  in particular, let `http.ServeMux` provide 404 and 405 responses unless the
+  current product contract explicitly requires different behavior;
 - delete speculative flexibility instead of preserving it for hypothetical
   future use;
 - grow the product incrementally from observed needs, changing the contract in
