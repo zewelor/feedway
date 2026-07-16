@@ -36,7 +36,7 @@ idiomatyczny dla Go i oparty głównie na bibliotece standardowej.
 - liveness, proste readiness i graceful shutdown;
 - strukturalne logi JSON;
 - ETag, Cache-Control i conditional requests;
-- hardcoded retencja 30 dni;
+- retencja domyślnie 60 dni, opcjonalnie ustawiana przez `RETENTION_DAYS`;
 - Docker Compose, distroless non-root i amd64/arm64;
 - testy jednostkowe, integracyjne i race;
 - repo-lokalne skille Go, Renovate i CI.
@@ -258,6 +258,7 @@ Konfiguracja:
 | --- | ---: | ---: |
 | `DATABASE_URL` | — | tak |
 | `API_TOKEN` | — | tak |
+| `RETENTION_DAYS` | `60` | nie |
 
 Wszystkie pozostałe wartości są konwencjami w kodzie:
 
@@ -265,18 +266,20 @@ Wszystkie pozostałe wartości są konwencjami w kodzie:
 - limit requestu i feeda 1 MiB;
 - limit treści 256 KiB;
 - 100 wpisów w feedzie;
-- retencja 30 dni i cleanup co 24 godziny;
+- cleanup retencji co 24 godziny;
 - standardowe timeouty HTTP, DB i shutdown;
 - log level `info`, format JSON.
 
-Brak `DATABASE_URL` albo `API_TOKEN` uniemożliwia start.
+Brak `DATABASE_URL` albo `API_TOKEN` oraz nieprawidłowe `RETENTION_DAYS`
+uniemożliwiają start.
 
 ## 9. Retencja
 
 Retencja usuwa jednym zapytaniem wpisy, których `created_at` jest starsze niż
-30 dni. Aktualizacja wpisu nie przedłuża jego życia. Cleanup wykonuje się po
-starcie i co 24 godziny. Jest idempotentny, respektuje shutdown i nie używa
-batchy, advisory locków ani konfiguracji.
+liczba dni ustawiona przez opcjonalne `RETENTION_DAYS`; domyślna wartość to 60.
+Wartość musi być dodatnią liczbą całkowitą. Aktualizacja wpisu nie przedłuża
+jego życia. Cleanup wykonuje się po starcie i co 24 godziny. Jest idempotentny,
+respektuje shutdown i nie używa batchy ani advisory locków.
 
 ## 10. Logi i shutdown
 

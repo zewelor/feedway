@@ -11,6 +11,7 @@ import (
 	"github.com/zewelor/feedway/internal/config"
 	"github.com/zewelor/feedway/internal/database"
 	"github.com/zewelor/feedway/internal/httpserver"
+	"github.com/zewelor/feedway/internal/retention"
 )
 
 func main() {
@@ -40,5 +41,21 @@ func run() error {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	return httpserver.Run(ctx, configuration.APIToken, pool, logger)
+	retentionCtx, cancelRetention := context.WithCancel(context.WithoutCancel(ctx))
+	retentionDone := make(chan struct{})
+	go func() {
+		defer close(retentionDone)
+		retention.Run(
+			retentionCtx,
+			pool,
+			configuration.RetentionDays,
+			logger,
+		)
+	}()
+
+	err = httpserver.Run(ctx, configuration.APIToken, pool, logger)
+	cancelRetention()
+	<-retentionDone
+
+	return err
 }

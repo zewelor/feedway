@@ -21,8 +21,22 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":    strings.Repeat("a", 32),
 			},
 			expected: Config{
-				DatabaseURL: "postgres://feedway:secret@postgres/feedway",
-				APIToken:    strings.Repeat("a", 32),
+				DatabaseURL:   "postgres://feedway:secret@postgres/feedway",
+				APIToken:      strings.Repeat("a", 32),
+				RetentionDays: 60,
+			},
+		},
+		{
+			name: "custom retention",
+			environment: map[string]string{
+				"DATABASE_URL":   "postgres://feedway:secret@postgres/feedway",
+				"API_TOKEN":      strings.Repeat("a", 32),
+				"RETENTION_DAYS": "90",
+			},
+			expected: Config{
+				DatabaseURL:   "postgres://feedway:secret@postgres/feedway",
+				APIToken:      strings.Repeat("a", 32),
+				RetentionDays: 90,
 			},
 		},
 		{
@@ -61,6 +75,24 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":    strings.Repeat("a", 31),
 			},
 			expectedError: "API_TOKEN must be at least 32 bytes",
+		},
+		{
+			name: "retention is not an integer",
+			environment: map[string]string{
+				"DATABASE_URL":   "postgres://postgres/feedway",
+				"API_TOKEN":      strings.Repeat("a", 32),
+				"RETENTION_DAYS": "many",
+			},
+			expectedError: "RETENTION_DAYS must be a positive integer",
+		},
+		{
+			name: "retention is zero",
+			environment: map[string]string{
+				"DATABASE_URL":   "postgres://postgres/feedway",
+				"API_TOKEN":      strings.Repeat("a", 32),
+				"RETENTION_DAYS": "0",
+			},
+			expectedError: "RETENTION_DAYS must be a positive integer",
 		},
 	}
 

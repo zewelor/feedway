@@ -4,12 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
+const defaultRetentionDays = 60
+
 type Config struct {
-	DatabaseURL string
-	APIToken    string
+	DatabaseURL   string
+	APIToken      string
+	RetentionDays int
 }
 
 type LookupEnv func(string) (string, bool)
@@ -24,11 +28,30 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 	if len(apiToken) < 32 {
 		return Config{}, errors.New("API_TOKEN must be at least 32 bytes")
 	}
+	retentionDays, err := loadRetentionDays(lookupEnv)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
-		DatabaseURL: databaseURL,
-		APIToken:    apiToken,
+		DatabaseURL:   databaseURL,
+		APIToken:      apiToken,
+		RetentionDays: retentionDays,
 	}, nil
+}
+
+func loadRetentionDays(lookupEnv LookupEnv) (int, error) {
+	value, _ := lookupEnv("RETENTION_DAYS")
+	if value == "" {
+		return defaultRetentionDays, nil
+	}
+
+	days, err := strconv.Atoi(value)
+	if err != nil || days < 1 {
+		return 0, errors.New("RETENTION_DAYS must be a positive integer")
+	}
+
+	return days, nil
 }
 
 func validateDatabaseURL(value string) error {
