@@ -75,13 +75,13 @@ Sourcetap.
 
 ## Bootstrap
 
-- [ ] **P0 — specyfikacja i kontrakt pracy**
+- [x] **P0 — specyfikacja i kontrakt pracy**
   - dodać plan, `AGENTS.md` i niebacklogowy `docs/future-ideas.md`;
   - zapisać workflow review-before-commit, KISS i convention over configuration;
   - ograniczyć produkt do jednego hardcoded feeda i wymaganego `external_id`;
   - pierwszy commit obejmuje zastany `spec.md`.
 
-- [ ] **P1 — skille**
+- [x] **P1 — skille**
   - zainstalować dokładny zestaw przez `npx skills add ... --copy`;
   - sprawdzić katalogi, lock i `npx skills list --json`;
   - wykluczyć `.agents/` z narzędzi modyfikujących pliki.
