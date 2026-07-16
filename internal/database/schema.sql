@@ -1,12 +1,11 @@
 CREATE TABLE IF NOT EXISTS entries (
-    external_id text PRIMARY KEY,
+    id           text PRIMARY KEY,
     title        text,
     content_html text NOT NULL,
     created_at   timestamptz NOT NULL DEFAULT now(),
-    updated_at   timestamptz NOT NULL DEFAULT now(),
 
-    CONSTRAINT entries_external_id_valid CHECK (
-        char_length(btrim(external_id)) BETWEEN 1 AND 512
+    CONSTRAINT entries_id_valid CHECK (
+        id ~ '^sha256-v1:[0-9a-f]{64}$'
     ),
     CONSTRAINT entries_title_length CHECK (
         title IS NULL OR char_length(title) <= 1000
@@ -18,4 +17,4 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 
 CREATE INDEX IF NOT EXISTS entries_created_index
-    ON entries(created_at DESC, external_id DESC);
+    ON entries(created_at DESC, id DESC);
