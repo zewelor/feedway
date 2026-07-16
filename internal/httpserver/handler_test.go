@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zewelor/feedway/internal/entry"
 )
 
 const testAPIToken = "01234567890123456789012345678901"
@@ -68,19 +70,18 @@ func TestHandler(t *testing.T) {
 			name:   "publishing accepts JSON media type parameters",
 			method: http.MethodPost,
 			path:   "/api/v1/entries",
-			body:   "{}",
+			body:   `{"content_html":"<p>content</p>"}`,
 			headers: map[string]string{
 				"Authorization": "Bearer " + testAPIToken,
 				"Content-Type":  "application/json; charset=utf-8",
 			},
-			expectedStatus: http.StatusNotImplemented,
-			expectedError:  "publishing is not implemented",
+			expectedStatus: http.StatusCreated,
 		},
 		{
 			name:   "publishing limits request body",
 			method: http.MethodPost,
 			path:   "/api/v1/entries",
-			body:   strings.Repeat("a", requestMaxBytes+1),
+			body:   `{"content_html":"` + strings.Repeat("a", requestMaxBytes) + `"}`,
 			headers: map[string]string{
 				"Authorization": "Bearer " + testAPIToken,
 				"Content-Type":  "application/json",
@@ -119,7 +120,14 @@ func TestHandler(t *testing.T) {
 				database: pinger{},
 			}
 
-			newHandler(testAPIToken, readiness, logger).ServeHTTP(response, request)
+			newHandler(
+				testAPIToken,
+				readiness,
+				func(context.Context, entry.Values) (bool, error) {
+					return true, nil
+				},
+				logger,
+			).ServeHTTP(response, request)
 
 			if response.Code != test.expectedStatus {
 				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
@@ -144,32 +152,6 @@ func TestHandler(t *testing.T) {
 				t.Fatal("logs contain a secret or request body")
 			}
 		})
-	}
-}
-
-func TestHandlerResponseBodyIsBoundedAtLimit(t *testing.T) {
-	t.Parallel()
-
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/api/v1/entries",
-		io.LimitReader(strings.NewReader(strings.Repeat("a", requestMaxBytes)), requestMaxBytes),
-	)
-	request.Header.Set("Authorization", "Bearer "+testAPIToken)
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-
-	readiness := &readiness{
-		database: pinger{},
-	}
-	newHandler(
-		testAPIToken,
-		readiness,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-	).ServeHTTP(response, request)
-
-	if response.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusNotImplemented)
 	}
 }
 
@@ -216,6 +198,9 @@ func TestReadiness(t *testing.T) {
 			newHandler(
 				testAPIToken,
 				readiness,
+				func(context.Context, entry.Values) (bool, error) {
+					return true, nil
+				},
 				slog.New(slog.NewJSONHandler(&logs, nil)),
 			).ServeHTTP(response, request)
 
@@ -227,6 +212,111 @@ func TestReadiness(t *testing.T) {
 			}
 			if !test.expectLog && logs.Len() != 0 {
 				t.Fatalf("logs = %q, want no access log", logs.String())
+			}
+		})
+	}
+}
+
+func TestPublishEntry(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		body           string
+		created        bool
+		publishError   error
+		expectedStatus int
+		expectedResult string
+		expectedError  string
+	}{
+		{
+			name:           "created",
+			body:           `{"title":" title ","content_html":"<p onclick=\"bad\">content</p>"}`,
+			created:        true,
+			expectedStatus: http.StatusCreated,
+			expectedResult: "created",
+		},
+		{
+			name:           "deduplicated",
+			body:           `{"content_html":"<p>content</p>"}`,
+			expectedStatus: http.StatusOK,
+			expectedResult: "deduplicated",
+		},
+		{
+			name:           "missing content",
+			body:           `{}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedError:  "content_html is required",
+		},
+		{
+			name:           "unknown field",
+			body:           `{"content_html":"content","id":"client-id"}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "request body is invalid",
+		},
+		{
+			name:           "trailing JSON",
+			body:           `{"content_html":"content"} {}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "request body is invalid",
+		},
+		{
+			name:           "database error",
+			body:           `{"content_html":"content"}`,
+			publishError:   errors.New("database error"),
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "internal server error",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/api/v1/entries",
+				strings.NewReader(test.body),
+			)
+			request.Header.Set("Authorization", "Bearer "+testAPIToken)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			var published entry.Values
+			publish := func(_ context.Context, values entry.Values) (bool, error) {
+				published = values
+				return test.created, test.publishError
+			}
+
+			newHandler(
+				testAPIToken,
+				&readiness{database: pinger{}},
+				publish,
+				slog.New(slog.NewTextHandler(io.Discard, nil)),
+			).ServeHTTP(response, request)
+
+			if response.Code != test.expectedStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
+			}
+			if test.expectedError != "" {
+				var body errorResponse
+				if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+					t.Fatalf("decode error response: %v", err)
+				}
+				if body.Error != test.expectedError {
+					t.Fatalf("error = %q, want %q", body.Error, test.expectedError)
+				}
+				return
+			}
+
+			var body entryResponse
+			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if body.Result != test.expectedResult {
+				t.Errorf("result = %q, want %q", body.Result, test.expectedResult)
+			}
+			if body.ID != published.ID {
+				t.Errorf("ID = %q, want %q", body.ID, published.ID)
 			}
 		})
 	}

@@ -9,6 +9,8 @@ import (
 	"mime"
 	"net/http"
 	"time"
+
+	"github.com/zewelor/feedway/internal/entry"
 )
 
 const readinessTimeout = 2 * time.Second
@@ -17,11 +19,28 @@ type errorResponse struct {
 	Error string `json:"error"`
 }
 
+type entryRequest struct {
+	Title       string `json:"title"`
+	ContentHTML string `json:"content_html"`
+}
+
+type entryResponse struct {
+	Result string `json:"result"`
+	ID     string `json:"id"`
+}
+
 type databasePinger interface {
 	Ping(context.Context) error
 }
 
-func newHandler(apiToken string, readiness *readiness, logger *slog.Logger) http.Handler {
+type publishEntry func(context.Context, entry.Values) (bool, error)
+
+func newHandler(
+	apiToken string,
+	readiness *readiness,
+	publish publishEntry,
+	logger *slog.Logger,
+) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
 	mux.HandleFunc("/healthz", methodNotAllowed)
@@ -29,7 +48,7 @@ func newHandler(apiToken string, readiness *readiness, logger *slog.Logger) http
 	mux.HandleFunc("/readyz", methodNotAllowed)
 	mux.Handle("POST /api/v1/entries", authenticate(
 		apiToken,
-		requireJSON(http.HandlerFunc(entries)),
+		requireJSON(http.HandlerFunc(entries(publish, logger))),
 	))
 	mux.HandleFunc("/api/v1/entries", methodNotAllowed)
 	mux.HandleFunc("/", notFound)
@@ -70,19 +89,60 @@ func notFound(response http.ResponseWriter, _ *http.Request) {
 	writeError(response, http.StatusNotFound, "not found")
 }
 
-func entries(response http.ResponseWriter, request *http.Request) {
-	_, err := io.Copy(io.Discard, request.Body)
-	if err != nil {
-		var maxBytesError *http.MaxBytesError
-		if errors.As(err, &maxBytesError) {
-			writeError(response, http.StatusRequestEntityTooLarge, "request body is too large")
+func entries(publish publishEntry, logger *slog.Logger) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		var input entryRequest
+		decoder := json.NewDecoder(request.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeDecodeError(response, err)
 			return
 		}
-		writeError(response, http.StatusBadRequest, "request body is invalid")
+		if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+			writeDecodeError(response, err)
+			return
+		}
+
+		values, err := entry.Normalize(input.Title, input.ContentHTML)
+		if err != nil {
+			writeError(response, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+
+		created, err := publish(request.Context(), values)
+		if err != nil {
+			logger.ErrorContext(request.Context(), "publish entry", "error", err)
+			writeError(response, http.StatusInternalServerError, "internal server error")
+			return
+		}
+
+		result := "deduplicated"
+		status := http.StatusOK
+		if created {
+			result = "created"
+			status = http.StatusCreated
+		}
+
+		logger.InfoContext(
+			request.Context(),
+			"entry published",
+			"id", values.ID,
+			"result", result,
+		)
+		writeJSON(response, status, entryResponse{
+			Result: result,
+			ID:     values.ID,
+		})
+	}
+}
+
+func writeDecodeError(response http.ResponseWriter, err error) {
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		writeError(response, http.StatusRequestEntityTooLarge, "request body is too large")
 		return
 	}
-
-	writeError(response, http.StatusNotImplemented, "publishing is not implemented")
+	writeError(response, http.StatusBadRequest, "request body is invalid")
 }
 
 func requireJSON(next http.Handler) http.Handler {
@@ -99,8 +159,12 @@ func requireJSON(next http.Handler) http.Handler {
 }
 
 func writeError(response http.ResponseWriter, status int, message string) {
+	writeJSON(response, status, errorResponse{Error: message})
+}
+
+func writeJSON(response http.ResponseWriter, status int, value any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	body, err := json.Marshal(errorResponse{Error: message})
+	body, err := json.Marshal(value)
 	if err != nil {
 		response.WriteHeader(http.StatusInternalServerError)
 		return

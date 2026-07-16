@@ -88,8 +88,18 @@ Content-Type: application/json
 To jedyny endpoint zapisu. Nie ma API listowania, pobierania, edycji ani
 usuwania wpisów.
 
-Request body ma hardcoded limit 1 MiB. Odpowiedź zawiera `result` oraz finalny
-wpis po normalizacji i sanitizacji.
+Request body ma hardcoded limit 1 MiB. Odpowiedź zawiera tylko wynik i
+wygenerowany identyfikator:
+
+```json
+{
+  "result": "created",
+  "id": "sha256-v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+}
+```
+
+Ponowienie tej samej finalnej treści zwraca `result: "deduplicated"` oraz ten
+sam identyfikator.
 
 ### 4.2. Publiczny feed
 
@@ -199,8 +209,8 @@ CREATE INDEX entries_created_index
     ON entries(created_at DESC, id DESC);
 ```
 
-Publikacja używa pojedynczego `INSERT ... ON CONFLICT DO NOTHING`. Nie wykonuje
-wcześniejszego SELECT-a.
+Publikacja używa pojedynczego `INSERT ... ON CONFLICT (id) DO NOTHING`. Nie
+wykonuje wcześniejszego SELECT-a.
 
 Schemat jednej tabeli jest osadzony przez `embed` i stosowany automatycznie
 przed rozpoczęciem nasłuchiwania. MVP nie ma osobnej komendy migracji, trybów
