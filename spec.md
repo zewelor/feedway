@@ -18,7 +18,7 @@ Feedway stosuje KISS oraz convention over configuration w duchu Rails/DHH:
 
 - jedna opiniotwórcza ścieżka dla każdego przypadku użycia;
 - mocne konwencje zamiast opcji;
-- konfiguracja tylko dla sekretów oraz zachowanego trybu migracji;
+- konfiguracja tylko dla wartości zależnych od środowiska;
 - żadnych abstrakcji, fallbacków ani extension points bez aktualnej potrzeby;
 - nowe możliwości dopiero po potwierdzeniu rzeczywistego zapotrzebowania.
 
@@ -31,15 +31,15 @@ idiomatyczny dla Go i oparty głównie na bibliotece standardowej.
 - `GET` i `HEAD /feed.json` jako JSON Feed 1.1;
 - hardcoded limit 100 najnowszych wpisów;
 - bezpieczny, sanitizowany `content_html`;
-- PostgreSQL 18.x i embedded migrations;
+- PostgreSQL 18.x i automatycznie stosowany embedded schema;
 - Bearer Token dla publikacji;
-- liveness, readiness i graceful shutdown;
+- liveness, proste readiness i graceful shutdown;
 - strukturalne logi JSON;
-- ETag, Last-Modified, Cache-Control i conditional requests;
-- retencja, cleanup w batchach i advisory locks;
-- Docker Compose, distroless non-root, debug target i amd64/arm64;
+- ETag, Cache-Control i conditional requests;
+- hardcoded retencja 30 dni;
+- Docker Compose, distroless non-root i amd64/arm64;
 - testy jednostkowe, integracyjne i race;
-- repo-lokalne skille Go, Renovate, CI, release, SBOM i skan obrazu.
+- repo-lokalne skille Go, Renovate i CI.
 
 Pomysły świadomie odłożone poza MVP są zapisane w `docs/future-ideas.md`. Ten
 plik nie jest backlogiem.
@@ -129,8 +129,9 @@ pól o wartości `null`.
 ### 4.3. Endpointy operacyjne
 
 - `GET /healthz` — liveness bez odpytywania bazy;
-- `GET /readyz` — inicjalizacja, dokładna wersja schematu, ping PostgreSQL z
-  krótkim timeoutem i stan shutdownu;
+- `GET /readyz` — zakończony start, ping PostgreSQL z krótkim timeoutem i stan
+  shutdownu;
+
 Serwer używa standardowego `net/http`. MVP nie zawiera Chi, Huma, OpenAPI ani
 Swagger UI.
 
@@ -170,23 +171,11 @@ Kolejność publikacji:
 
 Nie zwijamy białych znaków wewnątrz treści i nie kanonikalizujemy DOM.
 
-Polityka Bluemonday dopuszcza podstawowe elementy treści, nagłówki, listy,
-cytaty, `pre`, `code`, linki, obrazy, tabele, `details` i `summary`.
-
-Dopuszczone atrybuty:
-
-- link: `href`, `title`;
-- obraz: `src`, `alt`, `title`, `width`, `height`;
-- komórka tabeli: `colspan`, `rowspan`;
-- details: `open`.
-
-Linki dopuszczają absolutne `http`, `https` i `mailto`; obrazy tylko absolutne
-`http` i `https`. Linki HTTP(S) otrzymują `rel="noopener noreferrer"`.
-
-Usuwane są między innymi skrypty, style, iframe, formularze, aktywne media,
-SVG, event handlery, `class`, `id`, `style`, `target`, `data:` i `javascript:`.
-Jeżeli po sanitizacji nie pozostaje treść, API zwraca 422. Oryginalny HTML nie
-jest przechowywany.
+Sanitizacja używa bez modyfikacji konserwatywnej polityki `bluemonday.UGCPolicy`.
+Nie utrzymujemy własnej listy elementów, atrybutów ani protokołów. Jeżeli
+rzeczywisty wpis wymaga dodatkowego bezpiecznego elementu, politykę rozszerzymy
+w osobnej, testowanej zmianie. Jeżeli po sanitizacji nie pozostaje treść, API
+zwraca 422. Oryginalny HTML nie jest przechowywany.
 
 ## 6. PostgreSQL
 
@@ -219,14 +208,9 @@ CREATE INDEX entries_created_index
 Publikacja używa pojedynczego `INSERT ... ON CONFLICT ... DO UPDATE` z warunkiem
 pomijającym update identycznej treści. Nie wykonuje wcześniejszego SELECT-a.
 
-Migracje są numerowanymi plikami SQL, osadzonymi przez `embed` i wykonywanymi
-przez Tern v2 pod PostgreSQL advisory lockiem.
-
-Tryby:
-
-- `MIGRATIONS_MODE=auto` — migracje przed rozpoczęciem nasłuchiwania;
-- `MIGRATIONS_MODE=off` — brak migracji i wymaganie dokładnej wersji schematu;
-- `feedway migrate` — osobne uruchomienie migracji.
+Schemat jednej tabeli jest osadzony przez `embed` i stosowany automatycznie
+przed rozpoczęciem nasłuchiwania. MVP nie ma osobnej komendy migracji, trybów
+migracji ani zależności od frameworka migracyjnego.
 
 ## 7. JSON Feed i cache
 
@@ -251,10 +235,9 @@ Item:
 Finalny, nieskompresowany JSON ma hardcoded limit 1 MiB. Przekroczenie zwraca
 422; aplikacja nie publikuje cicho obciętej reprezentacji.
 
-ETag to SHA-256 finalnego JSON-u. Last-Modified to późniejsze z czasu startu
-procesu i maksymalnego `updated_at` wśród opublikowanych wpisów. `If-None-Match` ma
-pierwszeństwo przed `If-Modified-Since`. Trafienie zwraca 304 bez body. HEAD
-zwraca nagłówki GET bez body.
+ETag to SHA-256 finalnego JSON-u. Trafienie `If-None-Match` zwraca 304 bez body.
+HEAD zwraca nagłówki GET bez body. MVP nie implementuje `Last-Modified` ani
+`If-Modified-Since`.
 
 Feedway nie kompresuje odpowiedzi; kompresję może zapewnić reverse proxy.
 
@@ -270,7 +253,6 @@ Konfiguracja:
 | --- | ---: | ---: |
 | `DATABASE_URL` | — | tak |
 | `API_TOKEN` | — | tak |
-| `MIGRATIONS_MODE` | `auto` | nie |
 
 Wszystkie pozostałe wartości są konwencjami w kodzie:
 
@@ -278,7 +260,7 @@ Wszystkie pozostałe wartości są konwencjami w kodzie:
 - limit requestu i feeda 1 MiB;
 - limit treści 256 KiB;
 - 100 wpisów w feedzie;
-- retencja 30 dni, cleanup co 24 godziny, batch 1000;
+- retencja 30 dni i cleanup co 24 godziny;
 - standardowe timeouty HTTP, DB i shutdown;
 - log level `info`, format JSON.
 
@@ -286,18 +268,10 @@ Brak `DATABASE_URL` albo `API_TOKEN` uniemożliwia start.
 
 ## 9. Retencja
 
-Retencja usuwa wpisy, których `created_at` jest starsze niż 30 dni. Aktualizacja
-wpisu nie przedłuża jego życia.
-
-Worker:
-
-- startuje po readiness i wykonuje cleanup od razu;
-- działa co 24 godziny;
-- uzyskuje `pg_try_advisory_lock` na dedykowanym połączeniu;
-- usuwa maksymalnie 1000 rekordów w batchu;
-- respektuje anulowanie kontekstu pomiędzy batchami;
-- pomija cykl, gdy inna replika trzyma lock;
-- loguje błąd, ale nie zatrzymuje API ani nie zmienia readiness.
+Retencja usuwa jednym zapytaniem wpisy, których `created_at` jest starsze niż
+30 dni. Aktualizacja wpisu nie przedłuża jego życia. Cleanup wykonuje się po
+starcie i co 24 godziny. Jest idempotentny, respektuje shutdown i nie używa
+batchy, advisory locków ani konfiguracji.
 
 ## 10. Logi i shutdown
 
@@ -311,34 +285,28 @@ Po SIGTERM lub SIGINT aplikacja kolejno:
 1. wyłącza readiness;
 2. zatrzymuje przyjmowanie nowych requestów;
 3. kończy aktywne requesty;
-4. anuluje i kończy worker retencji;
+4. anuluje cleanup retencji;
 5. zamyka pool PostgreSQL;
 6. kończy proces w hardcoded timeoutcie 15 sekund.
 
-## 11. CLI
+## 11. Uruchomienie
 
-```text
-feedway serve
-feedway migrate
-```
-
-Brak albo nieznana komenda pokazuje usage i kończy kodem 2. CLI jest
-zaimplementowane bez frameworka komend.
+Binarka nie ma komend ani flag. Jej uruchomienie automatycznie przygotowuje
+schemat i startuje serwer.
 
 ## 12. Dostarczenie
 
 - Go 1.26.x i PostgreSQL 18.x, najnowszy stabilny patch w ramach major;
-- runtime dependencies: pgx/v5, Bluemonday i Tern v2;
+- runtime dependencies: pgx/v5 i Bluemonday;
 - narzędzia Go zapisane przez `go get -tool`;
 - obrazy bazowe przypięte digestem;
 - statyczny distroless Debian 13 non-root bez shella;
-- osobny debug target, niepublikowany jako `latest`;
 - Compose: read-only filesystem, brak capabilities i eskalacji uprawnień;
 - obrazy `linux/amd64` i `linux/arm64`;
 - brak Docker HEALTHCHECK; Compose używa endpointów HTTP;
 - brak artefaktów Kubernetes.
 
-## 13. Testy, CI i release
+## 13. Testy i CI
 
 `just test` uruchamia testy z `-race` w Docker Compose i zawsze sprząta zasoby.
 Integracja używa efemerycznego PostgreSQL 18.x. Dostępne są też
@@ -346,14 +314,14 @@ Integracja używa efemerycznego PostgreSQL 18.x. Dostępne są też
 
 Testy obejmują:
 
-- konfigurację i CLI;
+- konfigurację i transport HTTP;
 - normalizację i sanitizację HTML;
 - atomowy upsert, `created`, `updated` i `unchanged`;
 - równoległe upserty tego samego `external_id`;
-- migracje, dokładną wersję schematu i readiness;
-- retencję, batche i advisory lock;
+- automatyczne przygotowanie schematu i readiness;
+- retencję;
 - pusty feed, wpis bez tytułu, limit 100 i limit bajtów;
-- ETag, Last-Modified, 304 i HEAD;
+- ETag, 304 i HEAD;
 - auth, logi i graceful shutdown.
 
 `just ci` wykonuje format check, race, integrację z PostgreSQL 18, vet,
@@ -366,8 +334,8 @@ ograniczony do 18.x. Non-major Go/Docker/tools, digesty i wszystkie aktualizacje
 Actions mogą być automatycznie scalane po zielonym CI; pozostałe major wymagają
 ręcznego review.
 
-Tag release uruchamia pełne testy, multi-arch build, wersjonowane tagi, SBOM i
-skan obrazu. Cosign jest opcjonalny do czasu konfiguracji registry.
+Pierwsze wydanie powstaje po odbiorze MVP. Rozbudowana automatyzacja release,
+SBOM, skanowanie obrazu i podpisywanie nie należą do MVP.
 
 ## 14. Definition of Done
 
@@ -379,7 +347,7 @@ MVP jest gotowe, gdy użytkownik może:
 4. zaktualizować wpis przez `external_id` bez utworzenia duplikatu;
 5. otrzymać stabilny ETag i 304;
 6. potwierdzić health, readiness, retencję i graceful shutdown;
-7. wykonać migrację, backup i upgrade według README.
+7. wykonać backup i upgrade według README.
 
 Proces działa jako non-root, bez shella, z read-only filesystem i przechodzi
 pełne `just ci`.

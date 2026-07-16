@@ -54,7 +54,7 @@ modified by formatters or pre-commit tooling.
 - Before adding or updating a Go module, tool, container image, or GitHub
   Action, verify the latest stable release in official documentation and the
   upstream project. Do not use prereleases without explicit approval.
-- Stay within Go 1.26.x, PostgreSQL 18.x, pgx/v5, Bluemonday, and Tern v2.
+- Stay within Go 1.26.x, PostgreSQL 18.x, pgx/v5, and Bluemonday.
 - Pin container images by digest and GitHub Actions by full commit SHA, with a
   version comment for Actions.
 - Record Go tools with `go get -tool`.

@@ -26,15 +26,15 @@ wymagać jawnej zmiany kontraktu.
 - wymagane `content_html`, opcjonalny `title`;
 - bez UUID, hasha, deduplikacji treści, cursorów i management API;
 - `net/http`, bez Chi, Huma, OpenAPI i Swagger UI;
-- konfiguracja: `DATABASE_URL`, `API_TOKEN` i zachowany `MIGRATIONS_MODE`;
-- pełna operacyjność, skille, CI i release pozostają w MVP.
+- konfiguracja: tylko `DATABASE_URL` i `API_TOKEN`;
+- operacyjność, skille, CI i ręczny odbiór pozostają w MVP.
 
 ## Zależności
 
 Przed dodaniem modułu, narzędzia, obrazu lub Action należy sprawdzić najnowszą
 stabilną wersję w oficjalnej dokumentacji i upstreamie.
 
-- Go 1.26.x, PostgreSQL 18.x, pgx/v5, Bluemonday i Tern v2;
+- Go 1.26.x, PostgreSQL 18.x, pgx/v5 i Bluemonday;
 - bez prerelease bez jawnej zgody;
 - obrazy przypięte digestem, Actions pełnym SHA z komentarzem wersji;
 - narzędzia Go przez `go get -tool`;
@@ -100,11 +100,11 @@ Sourcetap.
 
 ## Aplikacja
 
-- [x] **P4 — konfiguracja i CLI**
-  - tylko `DATABASE_URL`, `API_TOKEN` i `MIGRATIONS_MODE`;
+- [x] **P4 — konfiguracja i start**
+  - tylko `DATABASE_URL` i `API_TOKEN`;
   - pozostałe wartości jako hardcoded conventions;
-  - `feedway serve` i `feedway migrate`; brak komendy zwraca usage i kod 2;
-  - testy konfiguracji i CLI.
+  - uruchomienie binarki startuje aplikację bez komend i flag;
+  - testy konfiguracji.
 
 - [x] **P5 — HTTP i reguły transportu**
   - standardowe `net/http`, `/healthz`, proste błędy JSON i limit body;
@@ -113,14 +113,14 @@ Sourcetap.
   - graceful shutdown.
 
 - [ ] **P6 — PostgreSQL, migracje i readiness**
-  - `pgxpool`, Tern i embedded migration jednej tabeli `entries`;
+  - `pgxpool` i embedded schema jednej tabeli `entries`;
   - `external_id text PRIMARY KEY`, bez UUID i hashy;
-  - advisory lock, `migrate`, dokładna wersja schematu w trybie `off`;
+  - automatyczne, idempotentne przygotowanie schematu przed startem HTTP;
   - `/readyz`, timeouty, lifecycle poola i testy awarii/shutdownu.
 
 - [ ] **P7 — sanitizacja HTML**
   - normalizacja CR/LF i whitespace;
-  - Bluemonday, dozwolone elementy/protokoły i link hardening;
+  - niezmodyfikowane `bluemonday.UGCPolicy`;
   - testy bezpieczeństwa, limitów i pustego wyniku.
 
 - [ ] **P8 — atomowy upsert**
@@ -141,16 +141,17 @@ Sourcetap.
 - [ ] **P10 — publiczny endpoint i cache**
   - tylko `GET` i `HEAD /feed.json`;
   - `application/feed+json; charset=utf-8`;
-  - ETag, Last-Modified, Cache-Control i conditional requests;
+  - ETag, Cache-Control i `If-None-Match`;
   - 422 po przekroczeniu hardcoded 1 MiB;
   - testy pustego feeda, 304, HEAD i granic bajtów.
 
 - [ ] **P11 — retencja**
-  - hardcoded 30 dni po `created_at`, cykl 24h i batch 1000;
-  - advisory lock, obsługa wielu replik i bezpieczny shutdown.
+  - jedno idempotentne kasowanie po `created_at` starszym niż 30 dni;
+  - cleanup po starcie, co 24h i bezpieczny shutdown;
+  - bez batchy, advisory locków i konfiguracji.
 
 - [ ] **P12 — obraz i Compose**
-  - statyczny distroless non-root, debug target i PostgreSQL 18;
+  - statyczny distroless non-root i PostgreSQL 18;
   - read-only filesystem, brak shella/capabilities, amd64/arm64;
   - bez artefaktów Kubernetes.
 
@@ -160,8 +161,8 @@ Sourcetap.
   - aktualne Actions przypięte do SHA;
   - kontrola czystości `go.mod` i `go.sum`.
 
-- [ ] **P14 — release i dokumentacja**
-  - pełne testy, multi-arch build, wersjonowane tagi, SBOM i skan obrazu;
-  - README: Compose, curl, n8n, backup, migracje, upgrade i troubleshooting;
+- [ ] **P14 — dokumentacja i odbiór**
+  - README: Compose, curl, n8n, backup, upgrade i troubleshooting;
   - smoke z aktualnym Miniflux: `/feed.json`, upsert, ETag i 304;
-  - po odbiorze przygotować `v0.1.0`; Cosign opcjonalny po konfiguracji registry.
+  - po odbiorze przygotować ręczne `v0.1.0`;
+  - automatyzacja release, SBOM, skan i podpisywanie są poza MVP.
