@@ -25,3 +25,7 @@ test-integration:
 
 # Run the complete local CI surface available in the current package.
 ci: test
+
+# Preview the files included in the Docker build context.
+test_dockerignore:
+    rsync -avn . /dev/shm --exclude-from .dockerignore
