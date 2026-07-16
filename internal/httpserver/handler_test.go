@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ func TestHandler(t *testing.T) {
 		headers        map[string]string
 		expectedStatus int
 		expectedError  string
+		expectedAllow  string
 		skipLog        bool
 	}{
 		{
@@ -94,14 +96,13 @@ func TestHandler(t *testing.T) {
 			method:         http.MethodGet,
 			path:           "/",
 			expectedStatus: http.StatusNotFound,
-			expectedError:  "not found",
 		},
 		{
 			name:           "unsupported method is rejected",
 			method:         http.MethodPost,
 			path:           "/healthz",
 			expectedStatus: http.StatusMethodNotAllowed,
-			expectedError:  "method not allowed",
+			expectedAllow:  "GET, HEAD",
 		},
 	}
 
@@ -126,6 +127,7 @@ func TestHandler(t *testing.T) {
 				func(context.Context, entry.Values) (bool, error) {
 					return true, nil
 				},
+				testFeed,
 				logger,
 			).ServeHTTP(response, request)
 
@@ -140,6 +142,13 @@ func TestHandler(t *testing.T) {
 				if body.Error != test.expectedError {
 					t.Fatalf("error = %q, want %q", body.Error, test.expectedError)
 				}
+			}
+			if response.Header().Get("Allow") != test.expectedAllow {
+				t.Fatalf(
+					"Allow = %q, want %q",
+					response.Header().Get("Allow"),
+					test.expectedAllow,
+				)
 			}
 
 			if test.skipLog && logs.Len() != 0 {
@@ -201,6 +210,7 @@ func TestReadiness(t *testing.T) {
 				func(context.Context, entry.Values) (bool, error) {
 					return true, nil
 				},
+				testFeed,
 				slog.New(slog.NewJSONHandler(&logs, nil)),
 			).ServeHTTP(response, request)
 
@@ -291,6 +301,7 @@ func TestPublishEntry(t *testing.T) {
 				testAPIToken,
 				&readiness{database: pinger{}},
 				publish,
+				testFeed,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
 
@@ -320,6 +331,166 @@ func TestPublishEntry(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFeed(t *testing.T) {
+	t.Parallel()
+
+	const body = `{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`
+	const etag = `"810768039550b475b5f15ef292e34ec3fa2440c38f0f9ffee7e3acf7a987f44f"`
+
+	tests := []struct {
+		name           string
+		method         string
+		path           string
+		ifNoneMatch    string
+		load           loadFeed
+		expectedStatus int
+		expectedBody   string
+		expectedLength int
+		expectedETag   string
+		expectedError  string
+		expectedAllow  string
+	}{
+		{
+			name:           "get",
+			method:         http.MethodGet,
+			path:           "/feed.json",
+			load:           testFeed,
+			expectedStatus: http.StatusOK,
+			expectedBody:   body,
+			expectedLength: len(body),
+			expectedETag:   etag,
+		},
+		{
+			name:           "head",
+			method:         http.MethodHead,
+			path:           "/feed.json",
+			load:           testFeed,
+			expectedStatus: http.StatusOK,
+			expectedLength: len(body),
+			expectedETag:   etag,
+		},
+		{
+			name:           "not modified",
+			method:         http.MethodGet,
+			path:           "/feed.json",
+			ifNoneMatch:    etag,
+			load:           testFeed,
+			expectedStatus: http.StatusNotModified,
+			expectedETag:   etag,
+		},
+		{
+			name:           "unsupported method",
+			method:         http.MethodPost,
+			path:           "/feed.json",
+			load:           testFeed,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   "Method Not Allowed\n",
+			expectedAllow:  "GET, HEAD",
+		},
+		{
+			name:   "maximum size",
+			method: http.MethodGet,
+			path:   "/feed.json",
+			load: func(context.Context) ([]byte, error) {
+				return []byte(strings.Repeat("x", feedMaxBytes)), nil
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody:   strings.Repeat("x", feedMaxBytes),
+			expectedLength: feedMaxBytes,
+		},
+		{
+			name:   "too large",
+			method: http.MethodGet,
+			path:   "/feed.json",
+			load: func(context.Context) ([]byte, error) {
+				return []byte(strings.Repeat("x", feedMaxBytes+1)), nil
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedError:  "feed is too large",
+		},
+		{
+			name:   "load error",
+			method: http.MethodGet,
+			path:   "/feed.json",
+			load: func(context.Context) ([]byte, error) {
+				return nil, errors.New("database error")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "internal server error",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := httptest.NewRequest(test.method, test.path, nil)
+			request.Header.Set("If-None-Match", test.ifNoneMatch)
+			response := httptest.NewRecorder()
+
+			newHandler(
+				testAPIToken,
+				&readiness{database: pinger{}},
+				func(context.Context, entry.Values) (bool, error) {
+					return true, nil
+				},
+				test.load,
+				slog.New(slog.NewTextHandler(io.Discard, nil)),
+			).ServeHTTP(response, request)
+
+			if response.Code != test.expectedStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
+			}
+			if response.Header().Get("Allow") != test.expectedAllow {
+				t.Fatalf(
+					"Allow = %q, want %q",
+					response.Header().Get("Allow"),
+					test.expectedAllow,
+				)
+			}
+			if test.expectedError != "" {
+				var errorBody errorResponse
+				if err := json.NewDecoder(response.Body).Decode(&errorBody); err != nil {
+					t.Fatalf("decode error response: %v", err)
+				}
+				if errorBody.Error != test.expectedError {
+					t.Fatalf("error = %q, want %q", errorBody.Error, test.expectedError)
+				}
+				return
+			}
+			if response.Body.String() != test.expectedBody {
+				t.Errorf("body size = %d, want %d", response.Body.Len(), len(test.expectedBody))
+			}
+			isFeedResponse := test.expectedStatus == http.StatusOK ||
+				test.expectedStatus == http.StatusNotModified
+			if isFeedResponse {
+				if response.Header().Get("Content-Type") != "application/feed+json; charset=utf-8" {
+					t.Errorf("Content-Type = %q", response.Header().Get("Content-Type"))
+				}
+				if response.Header().Get("Cache-Control") != "public, max-age=60, must-revalidate" {
+					t.Errorf("Cache-Control = %q", response.Header().Get("Cache-Control"))
+				}
+				if response.Header().Get("X-Content-Type-Options") != "nosniff" {
+					t.Errorf("X-Content-Type-Options = %q", response.Header().Get("X-Content-Type-Options"))
+				}
+			}
+			if test.expectedStatus == http.StatusOK {
+				if response.Header().Get("Content-Length") != strconv.Itoa(test.expectedLength) {
+					t.Errorf("Content-Length = %q", response.Header().Get("Content-Length"))
+				}
+			}
+			if test.expectedETag != "" &&
+				response.Header().Get("ETag") != test.expectedETag {
+				t.Errorf("ETag = %q, want %q", response.Header().Get("ETag"), test.expectedETag)
+			}
+		})
+	}
+}
+
+func testFeed(context.Context) ([]byte, error) {
+	return []byte(`{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`), nil
 }
 
 func TestPingDatabaseTimeout(t *testing.T) {

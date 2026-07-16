@@ -2,18 +2,24 @@ package httpserver
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/zewelor/feedway/internal/entry"
 )
 
-const readinessTimeout = 2 * time.Second
+const (
+	readinessTimeout = 2 * time.Second
+	feedMaxBytes     = 1 << 20
+)
 
 type errorResponse struct {
 	Error string `json:"error"`
@@ -34,26 +40,62 @@ type databasePinger interface {
 }
 
 type publishEntry func(context.Context, entry.Values) (bool, error)
+type loadFeed func(context.Context) ([]byte, error)
 
 func newHandler(
 	apiToken string,
 	readiness *readiness,
 	publish publishEntry,
+	load loadFeed,
 	logger *slog.Logger,
 ) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
-	mux.HandleFunc("/healthz", methodNotAllowed)
 	mux.HandleFunc("GET /readyz", readiness.handle)
-	mux.HandleFunc("/readyz", methodNotAllowed)
 	mux.Handle("POST /api/v1/entries", authenticate(
 		apiToken,
 		requireJSON(http.HandlerFunc(entries(publish, logger))),
 	))
-	mux.HandleFunc("/api/v1/entries", methodNotAllowed)
-	mux.HandleFunc("/", notFound)
+	mux.HandleFunc("GET /feed.json", feed(load, logger))
 
 	return logRequests(logger, mux)
+}
+
+func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		body, err := load(request.Context())
+		if err != nil {
+			logger.ErrorContext(request.Context(), "load feed", "error", err)
+			writeError(response, http.StatusInternalServerError, "internal server error")
+			return
+		}
+		if len(body) > feedMaxBytes {
+			writeError(response, http.StatusUnprocessableEntity, "feed is too large")
+			return
+		}
+
+		hash := sha256.Sum256(body)
+		etag := fmt.Sprintf(`"%x"`, hash)
+		response.Header().Set("Content-Type", "application/feed+json; charset=utf-8")
+		response.Header().Set("Cache-Control", "public, max-age=60, must-revalidate")
+		response.Header().Set("X-Content-Type-Options", "nosniff")
+		response.Header().Set("ETag", etag)
+		response.Header().Set("Content-Length", strconv.Itoa(len(body)))
+
+		if request.Header.Get("If-None-Match") == etag {
+			response.WriteHeader(http.StatusNotModified)
+			return
+		}
+		if request.Method == http.MethodHead {
+			response.WriteHeader(http.StatusOK)
+			return
+		}
+
+		response.WriteHeader(http.StatusOK)
+		if _, err := response.Write(body); err != nil {
+			return
+		}
+	}
 }
 
 func health(response http.ResponseWriter, _ *http.Request) {
@@ -79,14 +121,6 @@ func pingDatabase(ctx context.Context, database databasePinger, timeout time.Dur
 	defer cancel()
 
 	return database.Ping(ctx)
-}
-
-func methodNotAllowed(response http.ResponseWriter, _ *http.Request) {
-	writeError(response, http.StatusMethodNotAllowed, "method not allowed")
-}
-
-func notFound(response http.ResponseWriter, _ *http.Request) {
-	writeError(response, http.StatusNotFound, "not found")
 }
 
 func entries(publish publishEntry, logger *slog.Logger) http.HandlerFunc {
