@@ -256,7 +256,11 @@ Konfiguracja:
 
 | Zmienna | Domyślna | Wymagana |
 | --- | ---: | ---: |
-| `DATABASE_URL` | — | tak |
+| `DB_HOST` | — | tak |
+| `DB_PORT` | `5432` | nie |
+| `DB_NAME` | — | tak |
+| `DB_USER` | — | tak |
+| `DB_PASSWORD` | — | tak |
 | `API_TOKEN` | — | tak |
 | `RETENTION_DAYS` | `60` | nie |
 
@@ -270,8 +274,8 @@ Wszystkie pozostałe wartości są konwencjami w kodzie:
 - standardowe timeouty HTTP, DB i shutdown;
 - log level `info`, format JSON.
 
-Brak `DATABASE_URL` albo `API_TOKEN` oraz nieprawidłowe `RETENTION_DAYS`
-uniemożliwiają start.
+Brak wymaganej zmiennej, nieprawidłowy `DB_PORT`, zbyt krótki `API_TOKEN`
+albo nieprawidłowe `RETENTION_DAYS` uniemożliwiają start.
 
 ## 9. Retencja
 
@@ -285,8 +289,8 @@ respektuje shutdown i nie używa batchy ani advisory locków.
 
 Logowanie używa `log/slog` w formacie JSON. Logi obejmują metodę, route, status,
 czas, wygenerowane `id` i wynik publikacji. Nie obejmują Authorization, API_TOKEN,
-DATABASE_URL, request body ani pełnej treści wpisu. Udane probe'y `GET /healthz`
-i `GET /readyz` nie są logowane.
+danych dostępowych PostgreSQL, request body ani pełnej treści wpisu. Udane
+probe'y `GET /healthz` i `GET /readyz` nie są logowane.
 
 Po SIGTERM lub SIGINT aplikacja kolejno:
 
@@ -310,8 +314,10 @@ schemat i startuje serwer.
 - obrazy bazowe przypięte digestem;
 - statyczny distroless Debian 13 non-root bez shella;
 - Compose: read-only filesystem, brak capabilities i eskalacji uprawnień;
+- Compose wymaga sekretów `API_TOKEN` i `DB_PASSWORD`;
 - obrazy `linux/amd64` i `linux/arm64`;
-- brak Docker HEALTHCHECK; Compose używa endpointów HTTP;
+- brak Docker HEALTHCHECK i healthchecka aplikacji w Compose; endpointy HTTP są
+  dostępne dla docelowego środowiska uruchomieniowego;
 - brak artefaktów Kubernetes.
 
 ## 13. Testy i CI

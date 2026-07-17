@@ -26,7 +26,8 @@ wymagać jawnej zmiany kontraktu.
 - wymagane `content_html`, opcjonalny `title`, bez identyfikatora w request;
 - bez UUID, aktualizacji wpisów, cursorów i management API;
 - `net/http`, bez Chi, Huma, OpenAPI i Swagger UI;
-- konfiguracja: tylko `DATABASE_URL` i `API_TOKEN`;
+- konfiguracja: parametry połączenia PostgreSQL, `API_TOKEN` i opcjonalne
+  `RETENTION_DAYS`;
 - operacyjność, skille, CI i ręczny odbiór pozostają w MVP.
 
 ## Zależności
@@ -101,7 +102,8 @@ Sourcetap.
 ## Aplikacja
 
 - [x] **P4 — konfiguracja i start**
-  - tylko `DATABASE_URL` i `API_TOKEN`;
+  - osobne zmienne `DB_*`, z opcjonalnym portem `5432`;
+  - wymagany `API_TOKEN`;
   - pozostałe wartości jako hardcoded conventions;
   - uruchomienie binarki startuje aplikację bez komend i flag;
   - testy konfiguracji.
@@ -152,7 +154,7 @@ Sourcetap.
   - cleanup po starcie, co 24h i bezpieczny shutdown;
   - bez batchy, advisory locków i pozostałej konfiguracji.
 
-- [ ] **P12 — obraz i Compose**
+- [x] **P12 — obraz i Compose**
   - statyczny distroless non-root i PostgreSQL 18;
   - read-only filesystem, brak shella/capabilities, amd64/arm64;
   - bez artefaktów Kubernetes.

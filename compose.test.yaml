@@ -21,7 +21,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://feedway:feedway_test@postgres:5432/feedway_test
+      DB_HOST: postgres
+      DB_NAME: feedway_test
+      DB_PASSWORD: feedway_test
+      DB_PORT: 5432
+      DB_USER: feedway
       GOCACHE: /tmp/go-build
       GOMODCACHE: /tmp/go-mod
     read_only: true
