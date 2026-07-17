@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/hex"
 	"errors"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 const (
 	defaultDatabasePort  = 5432
 	defaultRetentionDays = 60
+	apiTokenLength       = 64
 )
 
 type Config struct {
@@ -30,8 +32,11 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 	}
 	apiToken, _ := lookupEnv("API_TOKEN")
 
-	if len(apiToken) < 32 {
-		return Config{}, errors.New("API_TOKEN must be at least 32 bytes")
+	if len(apiToken) != apiTokenLength {
+		return Config{}, errors.New("API_TOKEN must be 64 hexadecimal characters")
+	}
+	if _, err := hex.DecodeString(apiToken); err != nil {
+		return Config{}, errors.New("API_TOKEN must be 64 hexadecimal characters")
 	}
 	retentionDays, err := loadRetentionDays(lookupEnv)
 	if err != nil {

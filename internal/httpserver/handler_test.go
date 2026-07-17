@@ -17,7 +17,7 @@ import (
 	"github.com/zewelor/feedway/internal/entry"
 )
 
-const testAPIToken = "01234567890123456789012345678901"
+const testAPIToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 func TestHandler(t *testing.T) {
 	t.Parallel()
@@ -53,6 +53,46 @@ func TestHandler(t *testing.T) {
 			path:   "/api/v1/entries",
 			headers: map[string]string{
 				"Authorization": "Bearer invalid",
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "unauthorized",
+		},
+		{
+			name:   "publishing rejects wrong authorization scheme",
+			method: http.MethodPost,
+			path:   "/api/v1/entries",
+			headers: map[string]string{
+				"Authorization": "Basic " + testAPIToken,
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "unauthorized",
+		},
+		{
+			name:   "publishing rejects authorization without separator",
+			method: http.MethodPost,
+			path:   "/api/v1/entries",
+			headers: map[string]string{
+				"Authorization": "Bearer" + testAPIToken,
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "unauthorized",
+		},
+		{
+			name:   "publishing rejects extra authorization whitespace",
+			method: http.MethodPost,
+			path:   "/api/v1/entries",
+			headers: map[string]string{
+				"Authorization": "Bearer  " + testAPIToken,
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "unauthorized",
+		},
+		{
+			name:   "publishing rejects token with valid prefix",
+			method: http.MethodPost,
+			path:   "/api/v1/entries",
+			headers: map[string]string{
+				"Authorization": "Bearer " + testAPIToken + "0",
 			},
 			expectedStatus: http.StatusUnauthorized,
 			expectedError:  "unauthorized",
@@ -161,6 +201,23 @@ func TestHandler(t *testing.T) {
 				t.Fatal("logs contain a secret or request body")
 			}
 		})
+	}
+}
+
+func TestAuthenticateRejectsMultipleAuthorizationHeaders(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/entries", nil)
+	request.Header.Add("Authorization", "Bearer "+testAPIToken)
+	request.Header.Add("Authorization", "Bearer invalid")
+	response := httptest.NewRecorder()
+
+	authenticate(testAPIToken, http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
 }
 

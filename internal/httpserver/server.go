@@ -18,6 +18,7 @@ import (
 
 const (
 	address         = ":8080"
+	maxHeaderBytes  = 8 << 10
 	requestMaxBytes = 1 << 20
 	shutdownTimeout = 15 * time.Second
 )
@@ -51,6 +52,7 @@ func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    maxHeaderBytes,
 	}
 
 	return serve(ctx, server, listener, readiness)
