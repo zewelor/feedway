@@ -31,6 +31,10 @@ lint-markdown:
 format-markdown:
     {{compose}} run --rm --no-deps --user "$(id -u):$(id -g)" markdownlint --fix "**/*.md" "#.agents/**"
 
+# Enable the repository-managed native Git hooks.
+hooks-install:
+    git config --local core.hooksPath .githooks
+
 # Run tests and static checks without building the production image.
 ci-checks build="yes": lint-markdown
     #!/usr/bin/env bash

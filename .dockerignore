@@ -1,11 +1,11 @@
 .git
 .github
+.githooks
 .agents
 .codex
 .env*
 .dockerignore
 .gitignore
-.pre-commit-config.yaml
 AGENTS.md
 Dockerfile
 Justfile

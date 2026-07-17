@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+echo "Running complete local CI before push..."
+exec just ci

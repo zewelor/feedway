@@ -100,6 +100,13 @@ npx skills update -p -y
 
 ## Validation and Git output
 
+- Install the repository-managed native Git hooks after cloning with
+  `just hooks-install`. This sets the repository-local `core.hooksPath` to the
+  tracked `.githooks/` directory without requiring a separate hook manager.
+- The pre-push hook runs the complete `just ci` gate. Keep this expensive gate
+  on push rather than commit so local commits stay fast during review.
+- Git hooks are a local feedback layer, not a replacement for GitHub Actions.
+  The remote CI result remains authoritative.
 - `just test` is the acceptance gate for every implementation package.
 - Use the narrower `just test-unit` and `just test-integration` only while
   iterating; use `just ci` for the complete local CI surface.

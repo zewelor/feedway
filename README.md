@@ -306,11 +306,20 @@ RETENTION_DAYS=90
 All tests and quality tools run inside Docker:
 
 ```bash
+just hooks-install
 just format-markdown
 just lint-markdown
 just test
 just ci
 ```
+
+Run `just hooks-install` once after cloning. It configures Git's repository-local
+`core.hooksPath` to use the tracked hooks in `.githooks/`; no additional hook
+manager is required.
+
+The pre-push hook runs the complete `just ci` gate before every push. GitHub
+Actions runs the same gate again, so local hooks provide fast feedback without
+replacing the authoritative remote check.
 
 `just format-markdown` applies safe automatic Markdown fixes. Long prose lines
 reported by `just lint-markdown` still need to be wrapped manually. `just test`
