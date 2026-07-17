@@ -37,12 +37,12 @@ stabilną wersję w oficjalnej dokumentacji i upstreamie.
 
 - Go 1.26.x, PostgreSQL 18.x, pgx/v5 i Bluemonday;
 - bez prerelease bez jawnej zgody;
-- obrazy przypięte digestem, Actions pełnym SHA z komentarzem wersji;
+- obrazy przypięte digestem, Actions tagiem major;
 - narzędzia Go przez `go get -tool`;
 - dodatkowa zależność runtime wymaga uzasadnienia w review.
 
 Renovate: `gomod`, `dockerfile`, `docker-compose` i `github-actions`, z
-`gomodTidy`, dependency dashboard oraz pinowaniem digestów i SHA. PostgreSQL jest
+`gomodTidy`, dependency dashboard oraz pinowaniem digestów. PostgreSQL jest
 ograniczony do 18.x. Non-major Go/Docker/tools, digesty i wszystkie aktualizacje
 Actions mają automerge po zielonym CI. Pozostałe major wymagają review.
 
@@ -159,10 +159,10 @@ Sourcetap.
   - read-only filesystem, brak shella/capabilities, amd64/arm64;
   - bez artefaktów Kubernetes.
 
-- [ ] **P13 — CI**
+- [x] **P13 — CI**
   - `just ci`: format, race, PostgreSQL 18, vet, golangci-lint, govulncheck,
     `go mod verify` i build obrazu;
-  - aktualne Actions przypięte do SHA;
+  - aktualne Actions używane przez tag major;
   - kontrola czystości `go.mod` i `go.sum`.
 
 - [ ] **P14 — dokumentacja i odbiór**

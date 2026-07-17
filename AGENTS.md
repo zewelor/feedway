@@ -58,8 +58,8 @@ modified by formatters or pre-commit tooling.
   Action, verify the latest stable release in official documentation and the
   upstream project. Do not use prereleases without explicit approval.
 - Stay within Go 1.26.x, PostgreSQL 18.x, pgx/v5, and Bluemonday.
-- Pin container images by digest and GitHub Actions by full commit SHA, with a
-  version comment for Actions.
+- Pin container images by digest. Reference GitHub Actions by their major tag,
+  for example `actions/checkout@v7`.
 - Record Go tools with `go get -tool`.
 - Any additional runtime dependency requires an explicit justification in the
   review.
@@ -95,6 +95,11 @@ npx skills update -p -y
 - `just test` is the acceptance gate for every implementation package.
 - Use the narrower `just test-unit` and `just test-integration` only while
   iterating; use `just ci` for the complete local CI surface.
+- Run Go tests and quality tools only inside the project Docker image. This
+  includes `go test`, `go vet`, `golangci-lint`, `govulncheck`, `go mod verify`,
+  and module-tidiness checks. The host may invoke `just`, Docker, and Docker
+  Compose to orchestrate these checks; do not run equivalent Go commands
+  directly on the host, even as an additional verification step.
 - After changing the file layout, and especially after adding a file or
   directory at the repository root, run `just test_dockerignore`. Review the
   dry-run output and update `.dockerignore` when a file is not required in the

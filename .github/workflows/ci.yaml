@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build CI image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ci
+          load: true
+          tags: feedway-ci:latest
+          cache-from: type=gha,scope=ci
+          cache-to: type=gha,mode=max,scope=ci
+
+      - name: Run tests and static checks
+        run: just ci-checks no
+
+      - name: Build production image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: |
+            type=gha,scope=production
+            type=gha,scope=ci
+          cache-to: type=gha,mode=max,scope=production

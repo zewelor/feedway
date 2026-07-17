@@ -343,10 +343,10 @@ golangci-lint, govulncheck, `go mod verify`, kontrolę czystości modułu i buil
 obrazu.
 
 Renovate obsługuje `gomod`, `dockerfile`, `docker-compose` i `github-actions`,
-wykonuje `gomodTidy`, przypina digesty oraz pełne SHA Actions. PostgreSQL jest
-ograniczony do 18.x. Non-major Go/Docker/tools, digesty i wszystkie aktualizacje
-Actions mogą być automatycznie scalane po zielonym CI; pozostałe major wymagają
-ręcznego review.
+wykonuje `gomodTidy` i przypina digesty obrazów. Actions używają tagów major.
+PostgreSQL jest ograniczony do 18.x. Non-major Go/Docker/tools, digesty i
+wszystkie aktualizacje Actions mogą być automatycznie scalane po zielonym CI;
+pozostałe major wymagają ręcznego review.
 
 Pierwsze wydanie powstaje po odbiorze MVP. Rozbudowana automatyzacja release,
 SBOM, skanowanie obrazu i podpisywanie nie należą do MVP.
