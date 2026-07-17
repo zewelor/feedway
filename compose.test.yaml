@@ -14,9 +14,10 @@ services:
       - /var/lib/postgresql
 
   test:
+    image: feedway-ci:latest
     build:
       context: .
-      dockerfile: Dockerfile.test
+      target: ci
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,7 +28,7 @@ services:
       DB_PORT: 5432
       DB_USER: feedway
       GOCACHE: /tmp/go-build
-      GOMODCACHE: /tmp/go-mod
+      GOLANGCI_LINT_CACHE: /tmp/golangci-lint
     read_only: true
     tmpfs:
       - /tmp:exec,mode=1777

@@ -6,7 +6,6 @@
 .pre-commit-config.yaml
 AGENTS.md
 Dockerfile
-Dockerfile.test
 Justfile
 compose.yaml
 compose.test.yaml

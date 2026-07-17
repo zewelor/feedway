@@ -23,8 +23,25 @@ test-integration:
     trap '{{compose}} down --volumes --remove-orphans' EXIT
     {{compose}} run --build --rm test
 
-# Run the complete local CI surface available in the current package.
-ci: test
+# Run tests and static checks without building the production image.
+ci-checks build="yes":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    trap '{{compose}} down --volumes --remove-orphans' EXIT
+    build_flag=""
+    if [[ "{{build}}" == "yes" ]]; then build_flag="--build"; fi
+    {{compose}} run $build_flag --rm test sh -ec '
+        go test -race -tags=integration ./...
+        unformatted="$(find cmd internal -type f -name "*.go" -exec gofmt -l {} +)"
+        test -z "$unformatted" || { echo "$unformatted"; exit 1; }
+        go vet -tags=integration ./...
+        golangci-lint run --build-tags=integration
+        govulncheck ./...
+    '
+
+# Run the complete local CI quality gate.
+ci: ci-checks
+    docker build .
 
 # Preview the files included in the Docker build context.
 test_dockerignore:
