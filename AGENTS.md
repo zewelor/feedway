@@ -38,12 +38,19 @@ the operator.
 For every package:
 
 1. implement only that package;
-2. run `just test` in Docker Compose;
-3. present the diff for user review;
-4. apply the requested corrections;
-5. rerun `just test`;
-6. wait for explicit user acceptance;
-7. create exactly one local commit for the accepted package.
+2. present the diff for user review;
+3. apply requested corrections and repeat review without running formatters,
+   linters, or tests after every iteration;
+4. wait for the user to explicitly approve the change set;
+5. only after that approval, run the required formatters and linters, followed
+   by `just test` in Docker Compose;
+6. present any validation-induced changes or fixes for final review;
+7. create exactly one local commit only after the final diff is accepted.
+
+Do not run formatters, linters, or test suites during an active review loop
+unless the user explicitly asks for them. Validation is intentionally deferred
+until the proposed changes are approved so repeated review corrections do not
+waste time, compute, or tokens.
 
 Do not commit before explicit acceptance. Pushes, pull requests, tags, releases,
 and publishing images require a separate user instruction.

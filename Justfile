@@ -23,8 +23,16 @@ test-integration:
     trap '{{compose}} down --volumes --remove-orphans' EXIT
     {{compose}} run --build --rm test
 
+# Check repository Markdown without modifying files.
+lint-markdown:
+    {{compose}} run --rm --no-deps markdownlint "**/*.md" "#.agents/**"
+
+# Apply safe automatic fixes to repository Markdown.
+format-markdown:
+    {{compose}} run --rm --no-deps --user "$(id -u):$(id -g)" markdownlint --fix "**/*.md" "#.agents/**"
+
 # Run tests and static checks without building the production image.
-ci-checks build="yes":
+ci-checks build="yes": lint-markdown
     #!/usr/bin/env bash
     set -euo pipefail
     trap '{{compose}} down --volumes --remove-orphans' EXIT
