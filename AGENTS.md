@@ -2,14 +2,13 @@
 
 ## Source of truth
 
-- `spec.md` defines the MVP contract.
-- `docs/implementation-plan.md` is the only backlog. Do not create competing
-  roadmaps, TODO lists, or speculative follow-up documents.
+- `README.md` defines the current product and operator contract.
 - `docs/future-ideas.md` is a non-prioritized parking lot, not a backlog. Moving
-  an idea into the MVP requires an explicit user decision and updates to both
-  the specification and implementation plan.
-- Keep changes inside the current package from the implementation plan. Do not
-  implement later packages early.
+  an idea into the product requires an explicit user decision.
+- The completed MVP has no active backlog. Start a new implementation package
+  only after its scope and acceptance criteria are explicitly agreed.
+- Keep changes inside the current agreed package. Do not implement adjacent
+  ideas early. Update `README.md` when the product contract changes.
 
 ## Product design
 
@@ -58,7 +57,9 @@ modified by formatters or pre-commit tooling.
   Action, verify the latest stable release in official documentation and the
   upstream project. Do not use prereleases without explicit approval.
 - Stay within Go 1.26.x, PostgreSQL 18.x, pgx/v5, and Bluemonday.
-- Pin container images by digest. Reference GitHub Actions by their major tag,
+- Pin external container images by digest. The deployment example intentionally
+  uses the rolling `ghcr.io/zewelor/feedway:latest` image; CI also publishes an
+  immutable full-commit-SHA tag. Reference GitHub Actions by their major tag,
   for example `actions/checkout@v7`.
 - Record Go tools with `go get -tool`.
 - Any additional runtime dependency requires an explicit justification in the
@@ -79,9 +80,9 @@ fall back to remembered API details.
 
 ## Repo-local Go skills
 
-Install the exact skill set recorded in `docs/implementation-plan.md` directly
-from `samber/cc-skills-golang`, using `npx skills add ... --copy` for all
-supported agents. The CLI owns `.agents/skills` and `skills-lock.json`.
+Install the exact skill set recorded in `skills-lock.json` directly from
+`samber/cc-skills-golang`, using `npx skills add ... --copy` for all supported
+agents. The CLI owns `.agents/skills` and `skills-lock.json`.
 
 Verify installations with `npx skills list --json`. Update them only in a
 separate reviewed package with:

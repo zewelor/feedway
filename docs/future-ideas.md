@@ -1,61 +1,68 @@
 # Feedway — future ideas
 
-Ten dokument jest niepriorytetyzowanym parking lotem pomysłów świadomie
-wyłączonych z MVP. Nie jest backlogiem ani obietnicą implementacji.
+This document is a non-prioritized parking lot for ideas deliberately excluded
+from the MVP. It is neither a backlog nor a promise to implement them.
 
-Pomysł trafia do `docs/implementation-plan.md` dopiero po pojawieniu się
-konkretnej potrzeby, świadomej decyzji o zmianie kontraktu i określeniu
-minimalnego kryterium odbioru.
+An idea enters the product only after a concrete need appears, the contract
+change is explicitly accepted, and a minimal acceptance criterion is agreed.
 
-## Więcej feedów
+## More feeds
 
-- tabela `feeds` i identyfikatory feedów;
-- tworzenie, listowanie, aktualizacja i usuwanie feedów;
-- konfigurowalne tytuły, opisy i publiczne URL-e;
-- prywatne feedy i tokeny per feed.
+- a `feeds` table and feed identifiers;
+- creating, listing, updating, and deleting feeds;
+- configurable titles, descriptions, and public URLs;
+- private feeds and per-feed tokens.
 
-## Zarządzanie wpisami
+## Entry management
 
-- lista wpisów w API;
-- pobieranie i usuwanie pojedynczego wpisu;
+- listing entries through the API;
+- fetching and deleting individual entries;
 - cursor pagination;
-- osobny PATCH wpisu;
-- historia zmian lub soft delete.
+- updating entries;
+- revision history or soft deletion.
 
-## Alternatywna tożsamość i treść
+## Alternative identity and content
 
-- identyfikatory podawane przez klienta i aktualizacja istniejących wpisów;
-- UUIDv7 generowane przez PostgreSQL zamiast deterministycznego hasha;
-- osobne `content_text`;
-- top-level `url` wpisu;
-- podawane przez klienta `published_at`;
-- autorzy, tagi, załączniki i ikony.
+- client-provided identifiers and updates to existing entries;
+- PostgreSQL-generated UUIDv7 identifiers instead of deterministic hashes;
+- separate `content_text`;
+- a top-level entry `url`;
+- client-provided `published_at`;
+- authors, tags, attachments, and icons.
 
-## Powierzchnia HTTP i publikacja
+## Alternative storage
 
-- Huma, Chi, OpenAPI i Swagger UI, jeśli liczba endpointów uzasadni framework;
-- Problem Details dla rozbudowanego API;
-- landing page, discovery i `home_page_url`;
-- opcjonalne `feed_url`;
-- RSS, Atom, WebSub i paginacja publicznego feeda;
-- kompresja HTTP wewnątrz aplikacji.
+- SQLite for simple single-node deployments, if a concrete need appears to run
+  without external PostgreSQL.
 
-## Operacyjność na późniejsze potrzeby
+## HTTP surface and publishing
 
-- metryki Prometheus;
-- osobna komenda migracji i wersjonowane migracje, gdy pojawi się druga zmiana
-  schematu;
-- tryby migracji i kontrola oczekiwanej wersji schematu;
-- batchowana retencja i advisory lock, gdy skala danych lub liczba replik tego
-  wymaga;
-- `Last-Modified` i `If-Modified-Since`;
-- własna rozszerzona polityka sanitizacji HTML;
-- webhooki wychodzące, kolejki i Redis;
-- pełnotekstowe wyszukiwanie;
-- proxy obrazów;
-- manifesty Kubernetes;
-- debug target obrazu;
-- automatyzacja release, SBOM, skanowanie i podpisywanie obrazów;
-- wiele tokenów, użytkownicy, role i uprawnienia;
-- konfigurowanie obecnych hardcoded konwencji, ale tylko gdy realne wdrożenie
-  wymaga innej wartości.
+- Huma, Chi, OpenAPI, and Swagger UI if the number of endpoints justifies a
+  framework;
+- Problem Details for a larger API;
+- a landing page, discovery, and `home_page_url`;
+- an optional `feed_url`;
+- RSS, Atom, WebSub, and public feed pagination;
+- application-level HTTP compression.
+
+## Operations for later needs
+
+- Prometheus metrics;
+- a migration command and versioned migrations after the next schema change;
+- migration modes and expected schema version checks;
+- batched retention and an advisory lock when data volume or replica count
+  requires them;
+- `Last-Modified` and `If-Modified-Since`;
+- a custom extended HTML sanitization policy;
+- outgoing webhooks, queues, and Redis;
+- full-text search;
+- an image proxy;
+- Kubernetes manifests;
+- a debug container target;
+- formal release automation, SBOM generation, image scanning, and signing;
+- production backup, restore, and upgrade procedures after choosing the target
+  deployment environment;
+- a production smoke test with Miniflux, public routing, and TLS;
+- multiple tokens, users, roles, and permissions;
+- configuration for current hardcoded conventions, but only when a real
+  deployment needs a different value.

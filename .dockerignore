@@ -2,13 +2,14 @@
 .github
 .agents
 .codex
+.env*
 .dockerignore
+.gitignore
 .pre-commit-config.yaml
 AGENTS.md
 Dockerfile
 Justfile
-compose.yaml
-compose.test.yaml
+README.md
+compose.*.yaml
 docs
 skills-lock.json
-spec.md

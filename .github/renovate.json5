@@ -11,6 +11,7 @@
     "gomod",
   ],
   "dependencyDashboard": true,
+  "ignoreDeps": ["ghcr.io/zewelor/feedway"],
   "ignorePaths": [".agents/**"],
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
