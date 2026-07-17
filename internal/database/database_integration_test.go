@@ -3,7 +3,6 @@
 package database
 
 import (
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,13 +11,16 @@ import (
 	"github.com/zewelor/feedway/internal/entry"
 )
 
-func TestPrepare(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("DATABASE_URL is required")
-	}
+var testConfig = Config{
+	Host:     "postgres",
+	Port:     5432,
+	Name:     "feedway_test",
+	User:     "feedway",
+	Password: "feedway_test",
+}
 
-	pool, err := Open(t.Context(), databaseURL)
+func TestPrepare(t *testing.T) {
+	pool, err := Open(t.Context(), testConfig)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -57,7 +59,13 @@ func TestPrepare(t *testing.T) {
 func TestOpenUnavailableDatabase(t *testing.T) {
 	pool, err := Open(
 		t.Context(),
-		"postgres://feedway:feedway_test@127.0.0.1:1/feedway_test?connect_timeout=1",
+		Config{
+			Host:     "127.0.0.1",
+			Port:     1,
+			Name:     "feedway_test",
+			User:     "feedway",
+			Password: "feedway_test",
+		},
 	)
 	if pool != nil {
 		pool.Close()
@@ -69,12 +77,7 @@ func TestOpenUnavailableDatabase(t *testing.T) {
 }
 
 func TestInsertEntryDeduplicatesConcurrentWrites(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("DATABASE_URL is required")
-	}
-
-	pool, err := Open(t.Context(), databaseURL)
+	pool, err := Open(t.Context(), testConfig)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -146,12 +149,7 @@ func TestInsertEntryDeduplicatesConcurrentWrites(t *testing.T) {
 }
 
 func TestListEntriesReturnsNewestHundred(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("DATABASE_URL is required")
-	}
-
-	pool, err := Open(t.Context(), databaseURL)
+	pool, err := Open(t.Context(), testConfig)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
@@ -205,12 +203,7 @@ func TestListEntriesReturnsNewestHundred(t *testing.T) {
 }
 
 func TestDeleteExpiredEntries(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Fatal("DATABASE_URL is required")
-	}
-
-	pool, err := Open(t.Context(), databaseURL)
+	pool, err := Open(t.Context(), testConfig)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}

@@ -15,11 +15,24 @@ const operationTimeout = 5 * time.Second
 //go:embed schema.sql
 var schema string
 
-func Open(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
-	config, err := pgxpool.ParseConfig(databaseURL)
+type Config struct {
+	Host     string
+	Port     uint16
+	Name     string
+	User     string
+	Password string
+}
+
+func Open(ctx context.Context, database Config) (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig("")
 	if err != nil {
 		return nil, fmt.Errorf("parse database configuration: %w", err)
 	}
+	config.ConnConfig.Host = database.Host
+	config.ConnConfig.Port = database.Port
+	config.ConnConfig.Database = database.Name
+	config.ConnConfig.User = database.User
+	config.ConnConfig.Password = database.Password
 	config.MaxConns = 4
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)

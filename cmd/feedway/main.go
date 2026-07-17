@@ -30,7 +30,13 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := database.Open(ctx, configuration.DatabaseURL)
+	pool, err := database.Open(ctx, database.Config{
+		Host:     configuration.DBHost,
+		Port:     configuration.DBPort,
+		Name:     configuration.DBName,
+		User:     configuration.DBUser,
+		Password: configuration.DBPassword,
+	})
 	if err != nil {
 		return err
 	}
