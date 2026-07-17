@@ -61,7 +61,12 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          # PRs use the runner's native platform for a faster feedback loop;
+          # only pushes to main pay the cost of producing the multi-arch manifest.
+          # GitHub exposes X64/ARM64 through runner.arch; map those names to
+          # Docker's amd64/arm64 names while keeping the platform inline.
+          # Lowercasing alone is not enough: Docker calls X64 "amd64", not "x64".
+          platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || runner.arch == 'ARM64' && 'linux/arm64' || 'linux/amd64' }}
           # Pull requests validate the image; only pushes to main publish it.
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -69,4 +74,6 @@ jobs:
           cache-from: |
             type=gha,scope=production
             type=gha,scope=ci
-          cache-to: type=gha,mode=max,scope=production
+          # PRs consume existing caches but do not write to the shared production
+          # scope, avoiding cache churn from unmerged and potentially transient code.
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=production' || '' }}
