@@ -246,10 +246,11 @@ deployment, where network routing and TLS can be verified together.
 | `DB_PORT` | no | `5432` | PostgreSQL port |
 | `DB_NAME` | yes | `feedway` | PostgreSQL database |
 | `DB_USER` | yes | `feedway` | PostgreSQL user |
+| `HTTP_PORT` | no | `80` | HTTP listen port |
 | `RETENTION_DAYS` | no | `60` | Days to retain entries |
 
-The HTTP address (`:8080`), feed size, request size, item count, timeouts, and
-cleanup interval are conventions, not configuration.
+The feed size, request size, item count, timeouts, and cleanup interval are
+conventions, not configuration.
 
 ## ☁️ Stateless deployment
 
@@ -303,8 +304,8 @@ RETENTION_DAYS=90
 - **Publishing returns 401:** check the `Authorization: Bearer ...` header.
 - **Publishing returns 422:** the HTML is empty after sanitization or exceeds
   the documented limit.
-- **Port 8080 is already allocated:** stop the conflicting process. The MVP
-  intentionally has one fixed listen port.
+- **Port 8080 is already allocated:** stop the conflicting process or change the
+  published host port in Compose. The container listens on port 80 by default.
 
 ## 🧪 Development
 

@@ -24,6 +24,7 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":   strings.Repeat("a", 64),
 			},
 			expected: Config{
+				HTTPPort:      80,
 				DBHost:        "postgres",
 				DBPort:        5432,
 				DBName:        "feedway",
@@ -34,16 +35,18 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			name: "custom retention",
+			name: "custom HTTP port and retention",
 			environment: map[string]string{
 				"DB_HOST":        "postgres",
 				"DB_NAME":        "feedway",
 				"DB_USER":        "feedway",
 				"DB_PASSWORD":    "secret",
 				"API_TOKEN":      strings.Repeat("a", 64),
+				"HTTP_PORT":      "8080",
 				"RETENTION_DAYS": "90",
 			},
 			expected: Config{
+				HTTPPort:      8080,
 				DBHost:        "postgres",
 				DBPort:        5432,
 				DBName:        "feedway",
@@ -93,6 +96,7 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":   strings.Repeat("a", 64),
 			},
 			expected: Config{
+				HTTPPort:      80,
 				DBHost:        "db.example",
 				DBPort:        5433,
 				DBName:        "feed/way",
@@ -113,6 +117,18 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":   strings.Repeat("a", 64),
 			},
 			expectedError: "DB_PORT must be between 1 and 65535",
+		},
+		{
+			name: "HTTP port invalid",
+			environment: map[string]string{
+				"DB_HOST":     "postgres",
+				"DB_NAME":     "feedway",
+				"DB_USER":     "feedway",
+				"DB_PASSWORD": "secret",
+				"API_TOKEN":   strings.Repeat("a", 64),
+				"HTTP_PORT":   "65536",
+			},
+			expectedError: "HTTP_PORT must be between 1 and 65535",
 		},
 		{
 			name: "API token shorter than 64 characters",

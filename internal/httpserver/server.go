@@ -17,14 +17,18 @@ import (
 )
 
 const (
-	address         = ":8080"
 	maxHeaderBytes  = 8 << 10
 	requestMaxBytes = 1 << 20
 	shutdownTimeout = 15 * time.Second
 )
 
-func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.Logger) error {
-	listener, err := net.Listen("tcp", address)
+type Config struct {
+	Port     uint16
+	APIToken string
+}
+
+func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Logger) error {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
 	if err != nil {
 		return fmt.Errorf("listen HTTP: %w", err)
 	}
@@ -34,7 +38,7 @@ func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.
 	}
 	server := &http.Server{
 		Handler: newHandler(
-			apiToken,
+			config.APIToken,
 			readiness,
 			func(ctx context.Context, values entry.Values) (bool, error) {
 				return database.InsertEntry(ctx, pool, values)

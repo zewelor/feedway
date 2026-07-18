@@ -46,8 +46,8 @@ FROM gcr.io/distroless/static-debian13:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae
 COPY --from=build --chown=nonroot:nonroot /feedway /feedway
 COPY --chown=nonroot:nonroot LICENSE /LICENSE
 
-USER nonroot:nonroot
+EXPOSE 80
 
-EXPOSE 8080
+USER nonroot:nonroot
 
 ENTRYPOINT ["/feedway"]

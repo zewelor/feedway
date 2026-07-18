@@ -14,7 +14,7 @@ services:
       DB_USER: ${DB_USER:-feedway}
       RETENTION_DAYS: ${RETENTION_DAYS:-60}
     ports:
-      - "8080:8080"
+      - "8080:80"
     read_only: true
     restart: unless-stopped
     stop_grace_period: 20s

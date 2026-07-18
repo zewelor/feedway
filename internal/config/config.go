@@ -9,11 +9,13 @@ import (
 
 const (
 	defaultDatabasePort  = 5432
+	defaultHTTPPort      = 80
 	defaultRetentionDays = 60
 	apiTokenLength       = 64
 )
 
 type Config struct {
+	HTTPPort      uint16
 	DBHost        string
 	DBPort        uint16
 	DBName        string
@@ -27,6 +29,10 @@ type LookupEnv func(string) (string, bool)
 
 func Load(lookupEnv LookupEnv) (Config, error) {
 	database, err := loadDatabase(lookupEnv)
+	if err != nil {
+		return Config{}, err
+	}
+	httpPort, err := loadPort(lookupEnv, "HTTP_PORT", defaultHTTPPort)
 	if err != nil {
 		return Config{}, err
 	}
@@ -44,6 +50,7 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 	}
 
 	return Config{
+		HTTPPort:      httpPort,
 		DBHost:        database.host,
 		DBPort:        database.port,
 		DBName:        database.name,
@@ -83,13 +90,9 @@ func loadDatabase(lookupEnv LookupEnv) (databaseConfig, error) {
 		}
 	}
 
-	port := uint16(defaultDatabasePort)
-	if value, _ := lookupEnv("DB_PORT"); value != "" {
-		parsedPort, err := strconv.ParseUint(value, 10, 16)
-		if err != nil || parsedPort == 0 {
-			return databaseConfig{}, errors.New("DB_PORT must be between 1 and 65535")
-		}
-		port = uint16(parsedPort)
+	port, err := loadPort(lookupEnv, "DB_PORT", defaultDatabasePort)
+	if err != nil {
+		return databaseConfig{}, err
 	}
 
 	return databaseConfig{
@@ -99,6 +102,20 @@ func loadDatabase(lookupEnv LookupEnv) (databaseConfig, error) {
 		user:     user,
 		password: password,
 	}, nil
+}
+
+func loadPort(lookupEnv LookupEnv, name string, defaultPort uint16) (uint16, error) {
+	value, _ := lookupEnv(name)
+	if value == "" {
+		return defaultPort, nil
+	}
+
+	port, err := strconv.ParseUint(value, 10, 16)
+	if err != nil || port == 0 {
+		return 0, errors.New(name + " must be between 1 and 65535")
+	}
+
+	return uint16(port), nil
 }
 
 func loadRetentionDays(lookupEnv LookupEnv) (int, error) {
