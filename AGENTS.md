@@ -2,13 +2,32 @@
 
 ## Source of truth
 
-- `README.md` defines the current product and operator contract.
+- `README.md` defines the current product promise and provides the documentation
+  landing page. The relevant page under `docs/` is the source of truth for the
+  detailed API, deployment, integration, or operations contract.
 - `docs/future-ideas.md` is a non-prioritized parking lot, not a backlog. Moving
   an idea into the product requires an explicit user decision.
 - The completed MVP has no active backlog. Start a new implementation package
   only after its scope and acceptance criteria are explicitly agreed.
 - Keep changes inside the current agreed package. Do not implement adjacent
-  ideas early. Update `README.md` when the product contract changes.
+  ideas early. Update the relevant `docs/` page and `README.md` when the
+  product contract changes.
+
+### Documentation synchronization
+
+- Keep the documentation structure in `docs/README.md` current when adding,
+  removing, or renaming a documentation page.
+- Any change to an HTTP method, path, authentication requirement, request or
+  response shape, status code, header, limit, or observable behavior must update
+  `docs/api.md` in the same package. Check the route implementation and its
+  examples against the documented contract.
+- Any change to environment variables, Compose defaults, deployment behavior,
+  health probes, logs, retention, or troubleshooting must update the matching
+  page under `docs/` in the same package. Update README examples or links when
+  the happy path changes.
+- Do not add a second hand-maintained API contract. Add OpenAPI or generated
+  reference tooling only as a separately accepted package with a concrete
+  consumer and an explicit source-of-truth decision.
 
 ## Product design
 

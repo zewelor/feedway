@@ -39,8 +39,8 @@ reading workflow.
 **Feedway changes the flow:**
 
 1. **You push** HTML to Feedway through one authenticated API endpoint.
-2. **Feedway sanitizes and stores** each entry, then serves the entries as a
-   public JSON Feed at `/feed.json`.
+2. **Feedway sanitizes and stores** each entry, then serves entries as a public
+   JSON Feed at `/feed.json`.
 3. **Your feed reader pulls** that feed and handles reading, archiving, and
    history.
 
@@ -66,21 +66,20 @@ configuration for values that can be conventions.
 ## 💡 Example use cases
 
 - **AI and news briefings:** collect selected posts, release notes, or articles,
-  summarize them with an LLM, and publish one readable digest instead of another
-  stream of notifications.
+  summarize them with an LLM, and publish one readable digest.
 - **Newsletter ingestion:** parse incoming newsletters and move their content
   into the same reading workflow as regular feed subscriptions.
 - **Operations reports:** publish scheduled infrastructure, database, or product
   metrics without building a dedicated dashboard for every small report.
-- **Transcripts:** turn saved videos or podcasts into readable summaries that can
-  be archived and revisited later.
-- **Website monitoring:** publish changes from websites that do not provide feeds
-  of their own.
+- **Transcripts:** turn saved videos or podcasts into readable summaries that
+  can be archived and revisited later.
+- **Website monitoring:** publish changes from websites that do not provide
+  feeds of their own.
 
 ## 🚀 Quick start
 
-You need Docker with Docker Compose and `curl`. Create a directory for the
-deployment and generate its secrets:
+You need Docker with Docker Compose, `curl`, and `openssl`. Create a directory
+for the deployment and generate its secrets:
 
 ```bash
 mkdir feedway && cd feedway
@@ -101,11 +100,13 @@ docker compose ps
 curl --fail http://localhost:8080/readyz
 ```
 
-The example runs `ghcr.io/zewelor/feedway:latest`. Every green push to `main`
-publishes that rolling tag together with an immutable full-commit-SHA tag.
+The example publishes host port 8080 to the container's port 80 and prepares
+the single database table automatically. There is no migration command to run.
+It uses `ghcr.io/zewelor/feedway:latest`; every green push to `main` also
+publishes an immutable full-commit-SHA image tag.
 
-Feedway prepares its single database table automatically. There is no migration
-command to run.
+For external PostgreSQL or other deployment environments, see the
+[deployment guide](docs/deployment.md).
 
 ## 📬 Publish an entry
 
@@ -121,191 +122,25 @@ curl --fail-with-body \
   http://localhost:8080/api/v1/entries
 ```
 
-The first request returns `201 Created`:
+The first request returns `201 Created`. Publishing the same final content
+again returns `200 OK` with `"result":"deduplicated"` and the same ID, making
+retries safe without client-generated identifiers.
 
-```json
-{"result":"created","id":"sha256-v1:..."}
-```
+The complete request, response, error, feed, cache, and probe contract lives in
+the [HTTP API reference](docs/api.md).
 
-Sending the same final content again returns `200 OK` with
-`"result":"deduplicated"` and the same ID. This makes retries safe without
-client-generated identifiers.
+## 📚 Documentation
 
-## 📐 API contract
+The [documentation handbook](docs/README.md) is the index for the detailed
+operator and integration guides:
 
-Feedway has exactly one hardcoded feed named `Feedway`. It accepts entries only
-through `POST /api/v1/entries` and serves the public feed only at `/feed.json`.
-There is no feed identifier, management API, landing page, `home_page_url`, or
-`feed_url`.
+- [HTTP API](docs/api.md) — publish entries, consume the feed, and inspect probes;
+- [Deployment](docs/deployment.md) — Compose, configuration, and external PostgreSQL;
+- [Integrations](docs/integrations.md) — n8n, Miniflux, and local verification;
+- [Operations](docs/operations.md) — logs, retention, probes, and troubleshooting.
 
-The request is a JSON object with these fields:
-
-| Field | Required | Limit |
-| --- | --- | --- |
-| `content_html` | yes | 256 KiB before and after sanitization |
-| `title` | no | 1,000 Unicode characters |
-
-The request body is limited to 1 MiB and unknown fields are rejected. Feedway
-normalizes line endings and surrounding whitespace, sanitizes HTML, and hashes
-the final title and HTML into a `sha256-v1:<hex>` identifier. Entries are
-immutable: changed content creates a new entry; identical final content is
-deduplicated.
-
-Identity is derived only from the final title and HTML. Publishing identical
-content again at a later time is therefore also treated as a retry. A recurring
-producer that needs every run to appear as a separate entry should include the
-run date, time, or another occurrence marker in the title or content.
-
-`GET` and `HEAD /feed.json` return up to the latest 100 entries as JSON Feed 1.1.
-The uncompressed representation is limited to 16 MiB. If all 100 entries would
-exceed that limit, Feedway returns the newest complete entries that fit; it never
-serves a partial entry. The feed includes `content_html`, `date_published`, and
-an optional `title`. Feedway does not compress responses or emit
-`Last-Modified`; a reverse proxy may add compression.
-
-Application errors use one shape:
-
-```json
-{"error":"content_html is required"}
-```
-
-Expected statuses are `400` for invalid JSON, `401` for invalid credentials,
-`413` for an oversized request, `415` for a non-JSON request, `422` for invalid
-content, `500` for an unexpected failure, and `503` when readiness fails.
-Unknown paths and unsupported methods use the standard Go `net/http` responses.
-
-## 🔎 Read and verify the feed locally
-
-Open [http://localhost:8080/feed.json](http://localhost:8080/feed.json) in a
-browser or use `curl`:
-
-```bash
-curl --fail http://localhost:8080/feed.json
-```
-
-Verify conditional requests:
-
-```bash
-etag="$(curl --fail --silent --head http://localhost:8080/feed.json \
-  | sed -n 's/^[Ee][Tt][Aa][Gg]:[[:space:]]*\(.*\)\r$/\1/p')"
-
-curl --include \
-  --header "If-None-Match: $etag" \
-  http://localhost:8080/feed.json
-```
-
-The second command should return `304 Not Modified` with no body.
-
-## 🤖 Publish from n8n
-
-Many independent workflows can end with the same **HTTP Request** node. For
-example, one workflow can summarize infrastructure alerts, another can build an
-LLM news briefing, and a third can collect release notes. They all publish to
-Feedway and appear in one Miniflux subscription.
-
-Configure the node with:
-
-- **Method:** `POST`
-- **URL:** `https://feed.example.com/api/v1/entries`
-- **Authentication:** a Header Auth credential containing
-  `Authorization: Bearer <API_TOKEN>`
-- **Body Content Type:** JSON
-- **JSON Body:**
-
-```javascript
-{{ {
-  title: $json.title,
-  content_html: $json.content_html
-} }}
-```
-
-Store the token in an n8n credential rather than directly in the workflow. The
-upstream node only needs to produce `title` and `content_html`. An empty title is
-allowed; `content_html` is required.
-
-## 📖 Read it in Miniflux
-
-After deploying Feedway somewhere Miniflux can reach, add this subscription in
-Miniflux:
-
-```text
-https://feed.example.com/feed.json
-```
-
-Feedway does not need a `BASE_URL`: the MVP does not emit self-referential URLs.
-The production Miniflux smoke test is intentionally left until the first real
-deployment, where network routing and TLS can be verified together.
-
-## ⚙️ Configuration
-
-| Variable | Required by app | Compose example | Purpose |
-| --- | --- | --- | --- |
-| `API_TOKEN` | yes | from `.env` | 64-character hexadecimal Bearer token |
-| `DB_PASSWORD` | yes | from `.env` | PostgreSQL password |
-| `DB_HOST` | yes | `postgres` | PostgreSQL host |
-| `DB_PORT` | no | `5432` | PostgreSQL port |
-| `DB_NAME` | yes | `feedway` | PostgreSQL database |
-| `DB_USER` | yes | `feedway` | PostgreSQL user |
-| `HTTP_PORT` | no | `80` | HTTP listen port |
-| `RETENTION_DAYS` | no | `60` | Days to retain entries |
-
-The feed size, request size, item count, timeouts, and cleanup interval are
-conventions, not configuration.
-
-## ☁️ Stateless deployment
-
-Feedway itself does not need a persistent disk. In Kubernetes, run only the
-stateless Feedway container and provide `DB_*` values for an existing
-PostgreSQL server. The PostgreSQL service in `compose.example.yaml` is a
-convenience for a small single-host installation, not a requirement of the
-application image.
-
-If you do not already operate PostgreSQL, managed services with a free plan can
-be useful starting points for a small deployment:
-
-- [Neon](https://neon.com/pricing) — serverless PostgreSQL with scale-to-zero;
-- [Aiven](https://aiven.io/docs/products/postgresql/concepts/pg-free-tier) — a
-  small managed PostgreSQL instance;
-- [Supabase](https://supabase.com/pricing) — a PostgreSQL project with a broader
-  application platform around it.
-
-Free-plan limits and availability can change, so verify the current terms
-before deployment. Feedway does not include Kubernetes manifests; connect it to
-the database using the conventions of your existing platform.
-
-## 🩺 Operations
-
-```text
-GET /healthz  process is alive; does not query PostgreSQL
-GET /readyz   startup finished, PostgreSQL responds, shutdown has not started
-```
-
-Successful probes are not logged. Other requests use structured JSON logs:
-
-```bash
-docker compose logs -f feedway
-```
-
-Retention runs once at startup and then every 24 hours. Override its 60-day
-default only when the deployment has a concrete reason:
-
-```text
-RETENTION_DAYS=90
-```
-
-## 🧰 Troubleshooting
-
-- **Compose says `API_TOKEN` or `DB_PASSWORD` is required:** create `.env` as
-  shown in Quick start and run the command from the deployment directory.
-- **Feedway rejects `API_TOKEN`:** generate the required 64-character
-  hexadecimal token with `openssl rand -hex 32`.
-- **`/readyz` returns 503:** inspect `docker compose ps` and
-  `docker compose logs postgres`.
-- **Publishing returns 401:** check the `Authorization: Bearer ...` header.
-- **Publishing returns 422:** the HTML is empty after sanitization or exceeds
-  the documented limit.
-- **Port 8080 is already allocated:** stop the conflicting process or change the
-  published host port in Compose. The container listens on port 80 by default.
+Deferred ideas are kept separately in [docs/future-ideas.md](docs/future-ideas.md).
+They are not an active roadmap.
 
 ## 🧪 Development
 
@@ -320,8 +155,8 @@ just ci
 ```
 
 Run `just hooks-install` once after cloning. It configures Git's repository-local
-`core.hooksPath` to use the tracked hooks in `.githooks/`; no additional hook
-manager is required.
+`core.hooksPath` to use the tracked `.githooks/`; no additional hook manager is
+required.
 
 The pre-push hook runs the complete `just ci` gate before every push. GitHub
 Actions runs the same gate again, so local hooks provide fast feedback without
@@ -331,9 +166,6 @@ replacing the authoritative remote check.
 reported by `just lint-markdown` still need to be wrapped manually. `just test`
 is the package acceptance gate. `just ci` additionally checks Markdown and Go
 formatting, modules, vet, golangci-lint, govulncheck, and the production image.
-
-Deferred ideas live in [docs/future-ideas.md](docs/future-ideas.md). They are
-not an active roadmap.
 
 ## 📄 License
 
