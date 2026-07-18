@@ -205,6 +205,90 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+func TestRequestLogging(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		pattern        string
+		method         string
+		target         string
+		expectedPath   string
+		expectedRoute  string
+		expectedStatus int
+	}{
+		{
+			name:           "matched route",
+			pattern:        "GET /entries/{id}",
+			method:         http.MethodGet,
+			target:         "/entries/sha256-v1:test?token=secret",
+			expectedPath:   "/entries/sha256-v1:test",
+			expectedRoute:  "GET /entries/{id}",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "unknown path",
+			pattern:        "GET /healthz",
+			method:         http.MethodGet,
+			target:         "/favicon.ico?token=secret",
+			expectedPath:   "/favicon.ico",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "unsupported method",
+			pattern:        "GET /healthz",
+			method:         http.MethodPost,
+			target:         "/healthz?token=secret",
+			expectedPath:   "/healthz",
+			expectedStatus: http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			mux := http.NewServeMux()
+			mux.HandleFunc(test.pattern, func(http.ResponseWriter, *http.Request) {})
+
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&logs, nil))
+			request := httptest.NewRequest(test.method, test.target, nil)
+			response := httptest.NewRecorder()
+
+			logRequests(logger, mux).ServeHTTP(response, request)
+
+			if response.Code != test.expectedStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
+			}
+			var logged struct {
+				Method string `json:"method"`
+				Path   string `json:"path"`
+				Route  string `json:"route"`
+				Status int    `json:"status"`
+			}
+			if err := json.NewDecoder(&logs).Decode(&logged); err != nil {
+				t.Fatalf("decode log: %v", err)
+			}
+			if logged.Method != test.method {
+				t.Errorf("method = %q, want %q", logged.Method, test.method)
+			}
+			if logged.Path != test.expectedPath {
+				t.Errorf("path = %q, want %q", logged.Path, test.expectedPath)
+			}
+			if logged.Route != test.expectedRoute {
+				t.Errorf("route = %q, want %q", logged.Route, test.expectedRoute)
+			}
+			if logged.Status != test.expectedStatus {
+				t.Errorf("logged status = %d, want %d", logged.Status, test.expectedStatus)
+			}
+			if strings.Contains(logs.String(), "secret") {
+				t.Fatal("log contains query string")
+			}
+		})
+	}
+}
+
 func TestAuthenticateRejectsMultipleAuthorizationHeaders(t *testing.T) {
 	t.Parallel()
 

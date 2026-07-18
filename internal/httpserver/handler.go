@@ -294,6 +294,7 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 			request.Context(),
 			"HTTP request",
 			"method", request.Method,
+			"path", request.URL.Path,
 			"route", request.Pattern,
 			"status", recorder.status,
 			"duration", time.Since(startedAt),

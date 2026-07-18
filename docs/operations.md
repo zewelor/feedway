@@ -16,7 +16,10 @@ The complete HTTP contract is in the [API reference](api.md#health-and-readiness
 ## Logs
 
 Successful health and readiness probes are not logged. Other requests use
-structured JSON logs containing the method, matched route, status, and duration.
+structured JSON logs containing the method, requested path, matched route,
+status, and duration. The path excludes the query string. The route is the
+matched `http.ServeMux` pattern and is empty for unmatched 404 and automatic 405
+responses.
 
 With Docker Compose, follow the Feedway logs with:
 
