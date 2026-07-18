@@ -17,6 +17,9 @@
 
 - Keep the documentation structure in `docs/README.md` current when adding,
   removing, or renaming a documentation page.
+- Markdown prose, headings, and code blocks may use lines up to 120 characters;
+  Markdown tables are exempt from the line-length rule and should not be
+  reshaped merely to satisfy it.
 - Any change to an HTTP method, path, authentication requirement, request or
   response shape, status code, header, limit, or observable behavior must update
   `docs/api.md` in the same package. Check the route implementation and its

@@ -41,7 +41,7 @@ unknown fields are rejected, and the JSON object contains:
 
 | Field | Required | Limit | Description |
 | --- | --- | --- | --- |
-| `content_html` | yes | 256 KiB before/after sanitization | HTML body |
+| `content_html` | yes | 256 KiB before and after sanitization | HTML body of the entry |
 | `title` | no | 1,000 Unicode characters | Entry title |
 
 Example:
@@ -83,7 +83,7 @@ Expected error statuses are:
 | `401` | Missing or invalid Bearer token |
 | `413` | Request body exceeds 1 MiB |
 | `415` | Content type is not JSON |
-| `422` | Invalid, empty, or oversized content |
+| `422` | Content is invalid, empty after sanitization, or exceeds a field limit |
 | `500` | Unexpected publishing failure |
 
 Application errors use one JSON shape:

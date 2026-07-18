@@ -5,6 +5,7 @@
 .codex
 .env*
 .dockerignore
+.markdownlint.json
 .gitignore
 AGENTS.md
 Dockerfile

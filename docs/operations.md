@@ -45,14 +45,11 @@ The setting must be a positive integer.
 
 ## Troubleshooting
 
-- **Compose requires `API_TOKEN` or `DB_PASSWORD`:** Create `.env` as shown in
-  the [deployment guide](deployment.md#quick-start-with-compose).
-- **Feedway rejects `API_TOKEN`:** Generate a 64-character hexadecimal token
-  with `openssl rand -hex 32`.
-- **`/readyz` returns `503`:** Check `docker compose ps` and the PostgreSQL logs.
-- **Publishing returns `401`:** Check the `Authorization: Bearer ...` header and
-  the credential value.
-- **Publishing returns `422`:** Check that HTML remains after sanitization and
-  stays within the documented limits.
-- **Port 8080 is already allocated:** Change the host port mapping in Compose;
-  the container listens on port 80 by default.
+| Symptom | Check |
+| --- | --- |
+| Compose says `API_TOKEN` or `DB_PASSWORD` is required | Create `.env` as shown in the [deployment guide](deployment.md#quick-start-with-compose). |
+| Feedway rejects `API_TOKEN` | Generate a 64-character hexadecimal token with `openssl rand -hex 32`. |
+| `/readyz` returns `503` | Check `docker compose ps` and the PostgreSQL logs. |
+| Publishing returns `401` | Check the `Authorization: Bearer ...` header and the credential value. |
+| Publishing returns `422` | Check that HTML remains after sanitization and stays within the documented limits. |
+| Port 8080 is already allocated | Stop the conflicting process or change the published host port in Compose. The container listens on port 80 by default. |
