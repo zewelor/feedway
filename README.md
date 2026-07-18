@@ -2,23 +2,30 @@
 
 [![CI](https://github.com/zewelor/feedway/actions/workflows/ci.yaml/badge.svg)](https://github.com/zewelor/feedway/actions/workflows/ci.yaml)
 
-**Turn generated content into a feed you can actually read.**
+**Read reports, digests, and other generated content in your feed reader.**
 
 ## 🗺️ Overview
 
-The name combines **feed** and **gateway**. Feedway is a tiny, self-hosted
-gateway between systems that produce content and the feed reader you already
-use. Send HTML from n8n workflows, scripts, agents, or your own LLM pipelines.
-Feedway turns it into one public
-[JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) that Miniflux can follow,
-with a public permalink for every entry.
+Feedway puts content from your automations into the same reading queue as your
+RSS subscriptions.
+
+n8n workflows, scripts, agents, and LLM pipelines send HTML to Feedway through
+a simple API. Feedway publishes everything as one
+[JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) subscription that you add
+to Miniflux once:
+
+```text
+https://feed.example.com/feed.json
+```
+
+JSON Feed is an alternative feed format to RSS. Miniflux reads it in the same
+way: new entries appear in your reading queue, where you can read, archive, and
+mark them as read. The name combines **feed** and **gateway**.
 
 ```mermaid
 flowchart LR
-    N["n8n workflows"] --> F["Feedway"]
-    L["Reports and digests"] --> F
-    S["Scripts and agents"] --> F
-    F --> M["Miniflux"]
+    N["n8n · scripts · agents"] -->|"POST HTML"| F["Feedway"]
+    F -->|"one JSON Feed subscription"| M["Miniflux"]
     M --> R["Read · archive · mark as read"]
 ```
 
