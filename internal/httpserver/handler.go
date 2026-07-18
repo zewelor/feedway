@@ -18,7 +18,8 @@ import (
 
 const (
 	readinessTimeout = 2 * time.Second
-	feedMaxBytes     = 1 << 20
+	// maxFeedBytes caps the uncompressed JSON Feed at 16 MiB.
+	maxFeedBytes = 16 * 1024 * 1024
 )
 
 type errorResponse struct {
@@ -69,7 +70,7 @@ func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {
 			writeError(response, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		if len(body) > feedMaxBytes {
+		if len(body) > maxFeedBytes {
 			writeError(response, http.StatusUnprocessableEntity, "feed is too large")
 			return
 		}

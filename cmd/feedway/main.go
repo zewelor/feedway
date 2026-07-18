@@ -47,7 +47,7 @@ func run() error {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	retentionCtx, cancelRetention := context.WithCancel(context.WithoutCancel(ctx))
+	retentionCtx, cancelRetention := context.WithCancel(ctx)
 	retentionDone := make(chan struct{})
 	go func() {
 		defer close(retentionDone)

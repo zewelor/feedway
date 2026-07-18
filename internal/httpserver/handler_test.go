@@ -451,18 +451,18 @@ func TestFeed(t *testing.T) {
 			method: http.MethodGet,
 			path:   "/feed.json",
 			load: func(context.Context) ([]byte, error) {
-				return []byte(strings.Repeat("x", feedMaxBytes)), nil
+				return []byte(strings.Repeat("x", maxFeedBytes)), nil
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   strings.Repeat("x", feedMaxBytes),
-			expectedLength: feedMaxBytes,
+			expectedBody:   strings.Repeat("x", maxFeedBytes),
+			expectedLength: maxFeedBytes,
 		},
 		{
 			name:   "too large",
 			method: http.MethodGet,
 			path:   "/feed.json",
 			load: func(context.Context) ([]byte, error) {
-				return []byte(strings.Repeat("x", feedMaxBytes+1)), nil
+				return []byte(strings.Repeat("x", maxFeedBytes+1)), nil
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedError:  "feed is too large",

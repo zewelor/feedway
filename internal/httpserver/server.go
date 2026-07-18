@@ -44,7 +44,7 @@ func Run(ctx context.Context, apiToken string, pool *pgxpool.Pool, logger *slog.
 				if err != nil {
 					return nil, err
 				}
-				return jsonfeed.Marshal(entries)
+				return jsonfeed.Marshal(entries, maxFeedBytes)
 			},
 			logger,
 		),
