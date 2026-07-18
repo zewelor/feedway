@@ -148,6 +148,61 @@ func TestInsertEntryDeduplicatesConcurrentWrites(t *testing.T) {
 	}
 }
 
+func TestGetEntry(t *testing.T) {
+	pool, err := Open(t.Context(), testConfig)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	if err := Prepare(t.Context(), pool); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), "TRUNCATE entries"); err != nil {
+		t.Fatalf("truncate entries: %v", err)
+	}
+
+	const id = "sha256-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if _, err := pool.Exec(
+		t.Context(),
+		`
+			INSERT INTO entries (id, title, content_html)
+			VALUES ($1, 'title', '<p>content</p>')
+		`,
+		id,
+	); err != nil {
+		t.Fatalf("insert entry: %v", err)
+	}
+
+	published, found, err := GetEntry(t.Context(), pool, id)
+	if err != nil {
+		t.Fatalf("GetEntry() error = %v", err)
+	}
+	if !found {
+		t.Fatal("GetEntry() found = false, want true")
+	}
+	if published.ID != id {
+		t.Errorf("ID = %q, want %q", published.ID, id)
+	}
+	if published.Title == nil || *published.Title != "title" {
+		t.Errorf("Title = %v, want title", published.Title)
+	}
+	if published.ContentHTML != "<p>content</p>" {
+		t.Errorf("ContentHTML = %q, want <p>content</p>", published.ContentHTML)
+	}
+	if published.CreatedAt.IsZero() {
+		t.Error("CreatedAt is zero")
+	}
+
+	_, found, err = GetEntry(t.Context(), pool, "sha256-v1:missing")
+	if err != nil {
+		t.Fatalf("GetEntry() missing error = %v", err)
+	}
+	if found {
+		t.Fatal("GetEntry() missing found = true, want false")
+	}
+}
+
 func TestListEntriesReturnsNewestHundred(t *testing.T) {
 	pool, err := Open(t.Context(), testConfig)
 	if err != nil {

@@ -167,6 +167,7 @@ func TestHandler(t *testing.T) {
 				func(context.Context, entry.Values) (bool, error) {
 					return true, nil
 				},
+				testEntry,
 				testFeed,
 				logger,
 			).ServeHTTP(response, request)
@@ -267,6 +268,7 @@ func TestReadiness(t *testing.T) {
 				func(context.Context, entry.Values) (bool, error) {
 					return true, nil
 				},
+				testEntry,
 				testFeed,
 				slog.New(slog.NewJSONHandler(&logs, nil)),
 			).ServeHTTP(response, request)
@@ -358,6 +360,7 @@ func TestPublishEntry(t *testing.T) {
 				testAPIToken,
 				&readiness{database: pinger{}},
 				publish,
+				testEntry,
 				testFeed,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
@@ -385,6 +388,155 @@ func TestPublishEntry(t *testing.T) {
 			}
 			if body.ID != published.ID {
 				t.Errorf("ID = %q, want %q", body.ID, published.ID)
+			}
+		})
+	}
+}
+
+func TestEntryPage(t *testing.T) {
+	t.Parallel()
+
+	title := "<Daily & report>"
+	const pageWithTitle = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;Daily &amp; report&gt;</title>
+</head>
+<body>
+<article>
+<h1>&lt;Daily &amp; report&gt;</h1>
+<p>content</p>
+</article>
+</body>
+</html>
+`
+	const pageWithoutTitle = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedway</title>
+</head>
+<body>
+<article>
+<p>content</p>
+</article>
+</body>
+</html>
+`
+
+	tests := []struct {
+		name           string
+		method         string
+		published      entry.Published
+		found          bool
+		loadError      error
+		expectedStatus int
+		expectedBody   string
+		expectedLength int
+		expectedAllow  string
+	}{
+		{
+			name:   "entry with title",
+			method: http.MethodGet,
+			published: entry.Published{
+				Title:       &title,
+				ContentHTML: "<p>content</p>",
+			},
+			found:          true,
+			expectedStatus: http.StatusOK,
+			expectedBody:   pageWithTitle,
+			expectedLength: len(pageWithTitle),
+		},
+		{
+			name:   "entry without title",
+			method: http.MethodGet,
+			published: entry.Published{
+				ContentHTML: "<p>content</p>",
+			},
+			found:          true,
+			expectedStatus: http.StatusOK,
+			expectedBody:   pageWithoutTitle,
+			expectedLength: len(pageWithoutTitle),
+		},
+		{
+			name:   "head",
+			method: http.MethodHead,
+			published: entry.Published{
+				Title:       &title,
+				ContentHTML: "<p>content</p>",
+			},
+			found:          true,
+			expectedStatus: http.StatusOK,
+			expectedLength: len(pageWithTitle),
+		},
+		{
+			name:           "not found",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   "404 page not found\n",
+		},
+		{
+			name:           "database error",
+			method:         http.MethodGet,
+			loadError:      errors.New("database error"),
+			expectedStatus: http.StatusInternalServerError,
+			expectedBody:   "internal server error\n",
+		},
+		{
+			name:           "unsupported method",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   "Method Not Allowed\n",
+			expectedAllow:  "GET, HEAD",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			load := func(_ context.Context, id string) (entry.Published, bool, error) {
+				if id != "sha256-v1:test" {
+					t.Errorf("ID = %q, want sha256-v1:test", id)
+				}
+				return test.published, test.found, test.loadError
+			}
+			request := httptest.NewRequest(test.method, "/entries/sha256-v1:test", nil)
+			response := httptest.NewRecorder()
+
+			newHandler(
+				testAPIToken,
+				&readiness{database: pinger{}},
+				func(context.Context, entry.Values) (bool, error) {
+					return true, nil
+				},
+				load,
+				testFeed,
+				slog.New(slog.NewTextHandler(io.Discard, nil)),
+			).ServeHTTP(response, request)
+
+			if response.Code != test.expectedStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.expectedStatus)
+			}
+			if response.Body.String() != test.expectedBody {
+				t.Errorf("body = %q, want %q", response.Body.String(), test.expectedBody)
+			}
+			if response.Header().Get("Allow") != test.expectedAllow {
+				t.Errorf("Allow = %q, want %q", response.Header().Get("Allow"), test.expectedAllow)
+			}
+			if test.expectedStatus == http.StatusOK {
+				if response.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+					t.Errorf("Content-Type = %q", response.Header().Get("Content-Type"))
+				}
+				if response.Header().Get("Content-Length") != strconv.Itoa(test.expectedLength) {
+					t.Errorf("Content-Length = %q", response.Header().Get("Content-Length"))
+				}
+				if response.Header().Get("X-Content-Type-Options") != "nosniff" {
+					t.Errorf("X-Content-Type-Options = %q", response.Header().Get("X-Content-Type-Options"))
+				}
 			}
 		})
 	}
@@ -493,6 +645,7 @@ func TestFeed(t *testing.T) {
 				func(context.Context, entry.Values) (bool, error) {
 					return true, nil
 				},
+				testEntry,
 				test.load,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
@@ -548,6 +701,10 @@ func TestFeed(t *testing.T) {
 
 func testFeed(context.Context) ([]byte, error) {
 	return []byte(`{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`), nil
+}
+
+func testEntry(context.Context, string) (entry.Published, bool, error) {
+	return entry.Published{}, false, nil
 }
 
 func TestPingDatabaseTimeout(t *testing.T) {

@@ -18,6 +18,7 @@ type feed struct {
 
 type item struct {
 	ID            string  `json:"id"`
+	URL           string  `json:"url"`
 	Title         *string `json:"title,omitempty"`
 	ContentHTML   string  `json:"content_html"`
 	DatePublished string  `json:"date_published"`
@@ -37,6 +38,7 @@ func Marshal(entries []entry.Published, maxBytes int) ([]byte, error) {
 	for _, published := range entries {
 		candidate := item{
 			ID:            published.ID,
+			URL:           "/entries/" + published.ID,
 			Title:         published.Title,
 			ContentHTML:   published.ContentHTML,
 			DatePublished: published.CreatedAt.UTC().Format(time.RFC3339Nano),

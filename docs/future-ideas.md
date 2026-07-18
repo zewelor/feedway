@@ -16,7 +16,7 @@ change is explicitly accepted, and a minimal acceptance criterion is agreed.
 ## Entry management
 
 - listing entries through the API;
-- fetching and deleting individual entries;
+- deleting individual entries;
 - cursor pagination;
 - updating entries;
 - revision history or soft deletion.
@@ -26,7 +26,6 @@ change is explicitly accepted, and a minimal acceptance criterion is agreed.
 - client-provided identifiers and updates to existing entries;
 - PostgreSQL-generated UUIDv7 identifiers instead of deterministic hashes;
 - separate `content_text`;
-- a top-level entry `url`;
 - client-provided `published_at`;
 - authors, tags, attachments, and icons.
 

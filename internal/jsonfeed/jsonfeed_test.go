@@ -44,9 +44,11 @@ func TestMarshalEntries(t *testing.T) {
 	}
 
 	const want = `{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[` +
-		`{"id":"sha256-v1:first","title":"Daily report","content_html":"\u003cp\u003efirst\u003c/p\u003e",` +
+		`{"id":"sha256-v1:first","url":"/entries/sha256-v1:first","title":"Daily report",` +
+		`"content_html":"\u003cp\u003efirst\u003c/p\u003e",` +
 		`"date_published":"2026-07-16T11:30:45.123Z"},` +
-		`{"id":"sha256-v1:second","content_html":"\u003cp\u003esecond\u003c/p\u003e",` +
+		`{"id":"sha256-v1:second","url":"/entries/sha256-v1:second",` +
+		`"content_html":"\u003cp\u003esecond\u003c/p\u003e",` +
 		`"date_published":"2026-07-16T10:00:00Z"}]}`
 	if string(got) != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)

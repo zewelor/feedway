@@ -10,7 +10,8 @@ The name combines **feed** and **gateway**. Feedway is a tiny, self-hosted
 gateway between systems that produce content and the feed reader you already
 use. Send HTML from n8n workflows, scripts, agents, or your own LLM pipelines.
 Feedway turns it into one public
-[JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) that Miniflux can follow.
+[JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) that Miniflux can follow,
+with a public permalink for every entry.
 
 ```mermaid
 flowchart LR
@@ -40,7 +41,7 @@ reading workflow.
 
 1. **You push** HTML to Feedway through one authenticated API endpoint.
 2. **Feedway sanitizes and stores** each entry, then serves entries as a public
-   JSON Feed at `/feed.json`.
+   JSON Feed at `/feed.json` and individual pages under `/entries/{id}`.
 3. **Your feed reader pulls** that feed and handles reading, archiving, and
    history.
 
@@ -52,6 +53,7 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 
 - exposes one authenticated endpoint for publishing entries;
 - serves one public feed at `/feed.json`;
+- serves a minimal public HTML page for each retained entry;
 - deduplicates retries using a deterministic content hash;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
 - keeps up to the latest 100 entries that fit within the 16 MiB feed limit;
@@ -134,7 +136,7 @@ the [HTTP API reference](docs/api.md).
 The [documentation handbook](docs/README.md) is the index for the detailed
 operator and integration guides:
 
-- [HTTP API](docs/api.md) — publish entries, consume the feed, and inspect probes;
+- [HTTP API](docs/api.md) — publish entries, read entries and the feed, and inspect probes;
 - [Deployment](docs/deployment.md) — Compose, configuration, and external PostgreSQL;
 - [Integrations](docs/integrations.md) — n8n, Miniflux, and local verification;
 - [Operations](docs/operations.md) — logs, retention, probes, and troubleshooting.

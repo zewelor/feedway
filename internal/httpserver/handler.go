@@ -1,11 +1,13 @@
 package httpserver
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log/slog"
 	"mime"
@@ -36,17 +38,40 @@ type entryResponse struct {
 	ID     string `json:"id"`
 }
 
+type entryPageData struct {
+	Title       *string
+	ContentHTML template.HTML
+}
+
+var entryPageTemplate = template.Must(template.New("entry").Parse(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{if .Title}}{{.Title}}{{else}}Feedway{{end}}</title>
+</head>
+<body>
+<article>
+{{if .Title}}<h1>{{.Title}}</h1>
+{{end}}{{.ContentHTML}}
+</article>
+</body>
+</html>
+`))
+
 type databasePinger interface {
 	Ping(context.Context) error
 }
 
 type publishEntry func(context.Context, entry.Values) (bool, error)
+type loadEntry func(context.Context, string) (entry.Published, bool, error)
 type loadFeed func(context.Context) ([]byte, error)
 
 func newHandler(
 	apiToken string,
 	readiness *readiness,
 	publish publishEntry,
+	loadOne loadEntry,
 	load loadFeed,
 	logger *slog.Logger,
 ) http.Handler {
@@ -57,9 +82,47 @@ func newHandler(
 		apiToken,
 		requireJSON(http.HandlerFunc(entries(publish, logger))),
 	))
+	mux.HandleFunc("GET /entries/{id}", entryPage(loadOne, logger))
 	mux.HandleFunc("GET /feed.json", feed(load, logger))
 
 	return logRequests(logger, mux)
+}
+
+func entryPage(load loadEntry, logger *slog.Logger) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		published, found, err := load(request.Context(), request.PathValue("id"))
+		if err != nil {
+			logger.ErrorContext(request.Context(), "load entry", "error", err)
+			http.Error(response, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(response, request)
+			return
+		}
+
+		var body bytes.Buffer
+		if err := entryPageTemplate.Execute(&body, entryPageData{
+			Title: published.Title,
+			// ContentHTML is sanitized before it is stored.
+			ContentHTML: template.HTML(published.ContentHTML),
+		}); err != nil {
+			logger.ErrorContext(request.Context(), "render entry", "error", err)
+			http.Error(response, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		response.Header().Set("Content-Type", "text/html; charset=utf-8")
+		response.Header().Set("Content-Length", strconv.Itoa(body.Len()))
+		response.Header().Set("X-Content-Type-Options", "nosniff")
+		response.WriteHeader(http.StatusOK)
+		if request.Method == http.MethodHead {
+			return
+		}
+		if _, err := response.Write(body.Bytes()); err != nil {
+			return
+		}
+	}
 }
 
 func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {

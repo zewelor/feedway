@@ -1,8 +1,8 @@
 # HTTP API
 
 Feedway exposes one authenticated publishing endpoint, one public JSON Feed,
-and two operational probes. Paths are relative to the HTTP origin where the
-container is published.
+public pages for individual entries, and two operational probes. Paths are
+relative to the HTTP origin where the container is published.
 
 There is exactly one hardcoded feed named `Feedway`. It has no feed identifier,
 feed-management API, landing page, `home_page_url`, or `feed_url`.
@@ -29,8 +29,9 @@ The response also includes:
 WWW-Authenticate: Bearer
 ```
 
-The feed and probes are public. Put TLS and any additional access control at a
-reverse proxy when the service is exposed beyond a trusted network.
+The feed, individual entry pages, and probes are public. Put TLS and any
+additional access control at a reverse proxy when the service is exposed beyond
+a trusted network.
 
 ## Publish an entry
 
@@ -102,8 +103,8 @@ Successful and error responses from the publishing endpoint use
 The response is [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) with the
 hardcoded feed title `Feedway`. It contains up to the latest 100 complete
 entries, newest first. The top-level object contains `version`, `title`, and
-`items`; each item contains `id`, `content_html`, `date_published`, and an
-optional `title`.
+`items`; each item contains `id`, `url`, `content_html`, `date_published`, and
+an optional `title`. The relative `url` is the public permalink for that entry.
 
 Example:
 
@@ -114,6 +115,7 @@ Example:
   "items": [
     {
       "id": "sha256-v1:...",
+      "url": "/entries/sha256-v1:...",
       "title": "Morning briefing",
       "content_html": "<p>Three systems reported healthy.</p>",
       "date_published": "2026-07-18T08:00:00Z"
@@ -157,6 +159,35 @@ curl --include \
 ```
 
 An unchanged representation returns `304 Not Modified` with no body.
+
+## Read an entry
+
+### `GET /entries/{id}`
+
+Returns one retained entry as a minimal HTML document. The page uses the entry
+title for both `<title>` and `<h1>`; an entry without a title uses `Feedway` for
+`<title>` and omits `<h1>`. The stored, sanitized `content_html` is rendered
+inside `<article>` without additional styling or JavaScript.
+
+JSON Feed items use this endpoint as their relative `url`. Keeping the URL
+relative lets Miniflux resolve it against the feed origin without requiring a
+`BASE_URL` setting.
+
+A successful response uses:
+
+```http
+Content-Type: text/html; charset=utf-8
+Content-Length: <response bytes>
+X-Content-Type-Options: nosniff
+```
+
+If the ID does not exist or retention has deleted the entry, the endpoint
+returns `404`. A database or rendering failure returns `500` and is logged
+without exposing internal details.
+
+### `HEAD /entries/{id}`
+
+`HEAD` returns the same status and headers as `GET` without a response body.
 
 ## Health and readiness
 

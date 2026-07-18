@@ -3,9 +3,11 @@ package database
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zewelor/feedway/internal/entry"
 )
@@ -81,6 +83,35 @@ func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (
 	}
 
 	return tag.RowsAffected() == 1, nil
+}
+
+func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Published, bool, error) {
+	getCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	var published entry.Published
+	err := pool.QueryRow(
+		getCtx,
+		`
+			SELECT id, title, content_html, created_at
+			FROM entries
+			WHERE id = $1
+		`,
+		id,
+	).Scan(
+		&published.ID,
+		&published.Title,
+		&published.ContentHTML,
+		&published.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entry.Published{}, false, nil
+	}
+	if err != nil {
+		return entry.Published{}, false, fmt.Errorf("get entry: %w", err)
+	}
+
+	return published, true, nil
 }
 
 func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, error) {

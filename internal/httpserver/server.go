@@ -43,6 +43,9 @@ func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Lo
 			func(ctx context.Context, values entry.Values) (bool, error) {
 				return database.InsertEntry(ctx, pool, values)
 			},
+			func(ctx context.Context, id string) (entry.Published, bool, error) {
+				return database.GetEntry(ctx, pool, id)
+			},
 			func(ctx context.Context) ([]byte, error) {
 				entries, err := database.ListEntries(ctx, pool)
 				if err != nil {

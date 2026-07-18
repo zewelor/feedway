@@ -38,8 +38,9 @@ After deploying Feedway somewhere Miniflux can reach, add this subscription:
 https://feed.example.com/feed.json
 ```
 
-Feedway does not need a `BASE_URL`: the MVP does not emit self-referential URLs,
-`home_page_url`, or `feed_url`.
+Each JSON Feed item contains a relative `/entries/{id}` permalink. Miniflux
+resolves it against the feed origin, so its external link opens the retained
+entry in Feedway. No `BASE_URL`, `home_page_url`, or `feed_url` is required.
 
 The production Miniflux smoke test is intentionally left until the first real
 deployment, where network routing and TLS can be verified together.
@@ -50,6 +51,12 @@ Read the public feed directly:
 
 ```bash
 curl --fail http://localhost:8080/feed.json
+```
+
+Copy an item's `url` from that response to verify its public HTML page:
+
+```bash
+curl --fail http://localhost:8080/entries/sha256-v1:...
 ```
 
 To verify conditional requests, fetch the `ETag` with `HEAD` and send it back in
