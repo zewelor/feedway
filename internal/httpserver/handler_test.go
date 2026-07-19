@@ -214,16 +214,14 @@ func TestRequestLogging(t *testing.T) {
 		method         string
 		target         string
 		expectedPath   string
-		expectedRoute  string
 		expectedStatus int
 	}{
 		{
-			name:           "matched route",
+			name:           "dynamic path",
 			pattern:        "GET /entries/{id}",
 			method:         http.MethodGet,
 			target:         "/entries/sha256-v1:test?token=secret",
 			expectedPath:   "/entries/sha256-v1:test",
-			expectedRoute:  "GET /entries/{id}",
 			expectedStatus: http.StatusOK,
 		},
 		{
@@ -264,7 +262,6 @@ func TestRequestLogging(t *testing.T) {
 			var logged struct {
 				Method string `json:"method"`
 				Path   string `json:"path"`
-				Route  string `json:"route"`
 				Status int    `json:"status"`
 			}
 			if err := json.NewDecoder(&logs).Decode(&logged); err != nil {
@@ -276,14 +273,14 @@ func TestRequestLogging(t *testing.T) {
 			if logged.Path != test.expectedPath {
 				t.Errorf("path = %q, want %q", logged.Path, test.expectedPath)
 			}
-			if logged.Route != test.expectedRoute {
-				t.Errorf("route = %q, want %q", logged.Route, test.expectedRoute)
-			}
 			if logged.Status != test.expectedStatus {
 				t.Errorf("logged status = %d, want %d", logged.Status, test.expectedStatus)
 			}
 			if strings.Contains(logs.String(), "secret") {
 				t.Fatal("log contains query string")
+			}
+			if strings.Contains(logs.String(), `"route":`) {
+				t.Fatal("log contains redundant route")
 			}
 		})
 	}
