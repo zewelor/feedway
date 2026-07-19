@@ -10,7 +10,7 @@ import (
 const (
 	defaultDatabasePort  = 5432
 	defaultHTTPPort      = 80
-	defaultRetentionDays = 60
+	defaultRetentionDays = 30
 	apiTokenLength       = 64
 )
 

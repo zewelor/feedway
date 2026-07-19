@@ -49,7 +49,7 @@ Only values that differ between deployment environments are configurable:
 | `DB_NAME` | yes | — | PostgreSQL database |
 | `DB_USER` | yes | — | PostgreSQL user |
 | `HTTP_PORT` | no | `80` | HTTP listen port inside the container |
-| `RETENTION_DAYS` | no | `60` | Days to retain entries |
+| `RETENTION_DAYS` | no | `30` | Days to retain entries |
 
 `API_TOKEN` must be exactly 64 hexadecimal characters. Generate one with:
 

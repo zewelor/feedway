@@ -34,7 +34,7 @@ docker compose logs postgres
 
 ## Retention
 
-Retention runs once at startup and then every 24 hours. It keeps entries for 60
+Retention runs once at startup and then every 24 hours. It keeps entries for 30
 days by default. Override the default only when the deployment has a concrete
 reason:
 

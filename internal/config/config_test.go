@@ -31,7 +31,7 @@ func TestLoad(t *testing.T) {
 				DBUser:        "feedway",
 				DBPassword:    "secret",
 				APIToken:      strings.Repeat("a", 64),
-				RetentionDays: 60,
+				RetentionDays: 30,
 			},
 		},
 		{
@@ -105,7 +105,7 @@ func TestLoad(t *testing.T) {
 				DBUser:        "feed@way",
 				DBPassword:    "p@ss/word",
 				APIToken:      strings.Repeat("a", 64),
-				RetentionDays: 60,
+				RetentionDays: 30,
 			},
 		},
 		{

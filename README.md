@@ -65,7 +65,7 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - deduplicates retries using a deterministic content hash;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
 - keeps up to the latest 100 entries that fit within the 16 MiB feed limit;
-- deletes database entries after 60 days by default;
+- deletes database entries after 30 days by default;
 - supports ETag, conditional requests, `GET`, and `HEAD`;
 - runs with PostgreSQL 18 in Docker Compose;
 - ships as a static, distroless, non-root container.

@@ -13,7 +13,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER:-feedway}
-      RETENTION_DAYS: ${RETENTION_DAYS:-60}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
     ports:
       - "8080:80"
     read_only: true
