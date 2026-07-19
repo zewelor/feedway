@@ -38,9 +38,10 @@ After deploying Feedway somewhere Miniflux can reach, add this subscription:
 https://feed.example.com/feed.json
 ```
 
-Each JSON Feed item contains a relative `/entries/{id}` permalink. Miniflux
-resolves it against the feed origin, so its external link opens the retained
-entry in Feedway. No `BASE_URL`, `home_page_url`, or `feed_url` is required.
+Set `BASE_URL` to the public Feedway origin when Miniflux needs absolute entry
+permalinks, for example `https://feed.example.com`. Each JSON Feed item then
+links to `https://feed.example.com/entries/{id}`. Without `BASE_URL`, Feedway
+keeps using a relative `/entries/{id}` permalink.
 
 The production Miniflux smoke test is intentionally left until the first real
 deployment, where network routing and TLS can be verified together.

@@ -62,6 +62,7 @@ func run() error {
 	err = httpserver.Run(ctx, httpserver.Config{
 		Port:     configuration.HTTPPort,
 		APIToken: configuration.APIToken,
+		BaseURL:  configuration.BaseURL,
 	}, pool, logger)
 	cancelRetention()
 	<-retentionDone

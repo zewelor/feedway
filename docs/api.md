@@ -104,7 +104,8 @@ The response is [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) with the
 hardcoded feed title `Feedway`. It contains up to the latest 100 complete
 entries, newest first. The top-level object contains `version`, `title`, and
 `items`; each item contains `id`, `url`, `content_html`, `date_published`, and
-an optional `title`. The relative `url` is the public permalink for that entry.
+an optional `title`. When `BASE_URL` is set, `url` is an absolute public
+permalink; otherwise it remains relative.
 
 Example:
 
@@ -115,7 +116,7 @@ Example:
   "items": [
     {
       "id": "sha256-v1:...",
-      "url": "/entries/sha256-v1:...",
+      "url": "https://feed.example.com/entries/sha256-v1:...",
       "title": "Morning briefing",
       "content_html": "<p>Three systems reported healthy.</p>",
       "date_published": "2026-07-18T08:00:00Z"
@@ -169,9 +170,8 @@ title for both `<title>` and `<h1>`; an entry without a title uses `Feedway` for
 `<title>` and omits `<h1>`. The stored, sanitized `content_html` is rendered
 inside `<article>` without additional styling or JavaScript.
 
-JSON Feed items use this endpoint as their relative `url`. Keeping the URL
-relative lets Miniflux resolve it against the feed origin without requiring a
-`BASE_URL` setting.
+JSON Feed items use this endpoint as their `url`. `BASE_URL` makes it absolute;
+without that setting, it remains relative to the feed origin.
 
 A successful response uses:
 

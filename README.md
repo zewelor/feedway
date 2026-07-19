@@ -61,6 +61,7 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - exposes one authenticated endpoint for publishing entries;
 - serves one public feed at `/feed.json`;
 - serves a minimal public HTML page for each retained entry;
+- supports absolute entry permalinks through an optional `BASE_URL`;
 - deduplicates retries using a deterministic content hash;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
 - keeps up to the latest 100 entries that fit within the 16 MiB feed limit;

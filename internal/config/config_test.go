@@ -35,18 +35,20 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{
-			name: "custom HTTP port and retention",
+			name: "custom HTTP port, base URL, and retention",
 			environment: map[string]string{
 				"DB_HOST":        "postgres",
 				"DB_NAME":        "feedway",
 				"DB_USER":        "feedway",
 				"DB_PASSWORD":    "secret",
 				"API_TOKEN":      strings.Repeat("a", 64),
+				"BASE_URL":       "https://feed.example.com/",
 				"HTTP_PORT":      "8080",
 				"RETENTION_DAYS": "90",
 			},
 			expected: Config{
 				HTTPPort:      8080,
+				BaseURL:       "https://feed.example.com",
 				DBHost:        "postgres",
 				DBPort:        5432,
 				DBName:        "feedway",

@@ -42,6 +42,7 @@ Only values that differ between deployment environments are configurable:
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `API_TOKEN` | yes | — | 64-character hexadecimal Bearer token |
+| `BASE_URL` | no | — | Public Feedway URL used for absolute entry permalinks |
 | `DB_PASSWORD` | yes | — | PostgreSQL password |
 | `DB_HOST` | yes | — | PostgreSQL host |
 | `DB_PORT` | no | `5432` | PostgreSQL port |
@@ -55,6 +56,10 @@ Only values that differ between deployment environments are configurable:
 ```bash
 openssl rand -hex 32
 ```
+
+Set `BASE_URL` to Feedway's public origin, for example
+`https://feed.example.com`. A trailing slash is ignored. When it is unset,
+entry permalinks remain relative.
 
 The feed size, request size, item count, timeouts, and cleanup interval are
 application conventions, not configuration.

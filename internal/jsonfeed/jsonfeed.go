@@ -24,7 +24,7 @@ type item struct {
 	DatePublished string  `json:"date_published"`
 }
 
-func Marshal(entries []entry.Published, maxBytes int) ([]byte, error) {
+func Marshal(entries []entry.Published, baseURL string, maxBytes int) ([]byte, error) {
 	items := make([]item, 0, len(entries))
 	body, err := marshal(items)
 	if err != nil {
@@ -38,7 +38,7 @@ func Marshal(entries []entry.Published, maxBytes int) ([]byte, error) {
 	for _, published := range entries {
 		candidate := item{
 			ID:            published.ID,
-			URL:           "/entries/" + published.ID,
+			URL:           baseURL + "/entries/" + published.ID,
 			Title:         published.Title,
 			ContentHTML:   published.ContentHTML,
 			DatePublished: published.CreatedAt.UTC().Format(time.RFC3339Nano),

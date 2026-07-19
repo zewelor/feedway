@@ -16,6 +16,7 @@ const (
 
 type Config struct {
 	HTTPPort      uint16
+	BaseURL       string
 	DBHost        string
 	DBPort        uint16
 	DBName        string
@@ -37,6 +38,7 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 		return Config{}, err
 	}
 	apiToken, _ := lookupEnv("API_TOKEN")
+	baseURL, _ := lookupEnv("BASE_URL")
 
 	if len(apiToken) != apiTokenLength {
 		return Config{}, errors.New("API_TOKEN must be 64 hexadecimal characters")
@@ -51,6 +53,7 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 
 	return Config{
 		HTTPPort:      httpPort,
+		BaseURL:       strings.TrimRight(baseURL, "/"),
 		DBHost:        database.host,
 		DBPort:        database.port,
 		DBName:        database.name,

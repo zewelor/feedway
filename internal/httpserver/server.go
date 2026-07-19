@@ -25,6 +25,7 @@ const (
 type Config struct {
 	Port     uint16
 	APIToken string
+	BaseURL  string
 }
 
 func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Logger) error {
@@ -51,7 +52,7 @@ func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Lo
 				if err != nil {
 					return nil, err
 				}
-				return jsonfeed.Marshal(entries, maxFeedBytes)
+				return jsonfeed.Marshal(entries, config.BaseURL, maxFeedBytes)
 			},
 			logger,
 		),
