@@ -27,16 +27,18 @@ func TestMarshalEntries(t *testing.T) {
 	t.Parallel()
 
 	title := "Daily report"
+	firstHTML := mustParseHTML(t, "<p>first</p>")
+	secondHTML := mustParseHTML(t, "<p>second</p>")
 	got, err := jsonfeed.Marshal([]entry.Published{
 		{
 			ID:          "sha256-v1:first",
 			Title:       &title,
-			ContentHTML: "<p>first</p>",
+			ContentHTML: firstHTML,
 			CreatedAt:   time.Date(2026, 7, 16, 12, 30, 45, 123000000, time.FixedZone("WEST", 3600)),
 		},
 		{
 			ID:          "sha256-v1:second",
-			ContentHTML: "<p>second</p>",
+			ContentHTML: secondHTML,
 			CreatedAt:   time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC),
 		},
 	}, "https://feed.example.com", 1024)
@@ -62,8 +64,9 @@ func TestMarshalUsesRelativeEntryURLWithoutBaseURL(t *testing.T) {
 
 	got, err := jsonfeed.Marshal([]entry.Published{
 		{
-			ID:        "sha256-v1:first",
-			CreatedAt: time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
+			ID:          "sha256-v1:first",
+			ContentHTML: mustParseHTML(t, "<p>first</p>"),
+			CreatedAt:   time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
 		},
 	}, "", 1024)
 	if err != nil {
@@ -82,12 +85,12 @@ func TestMarshalKeepsNewestEntriesThatFit(t *testing.T) {
 	entries := []entry.Published{
 		{
 			ID:          "sha256-v1:first",
-			ContentHTML: "<p>first</p>",
+			ContentHTML: mustParseHTML(t, "<p>first</p>"),
 			CreatedAt:   time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			ID:          "sha256-v1:second",
-			ContentHTML: "<p>second</p>",
+			ContentHTML: mustParseHTML(t, "<p>second</p>"),
 			CreatedAt:   time.Date(2026, 7, 16, 11, 0, 0, 0, time.UTC),
 		},
 	}
@@ -104,6 +107,17 @@ func TestMarshalKeepsNewestEntriesThatFit(t *testing.T) {
 	if string(got) != string(newest) {
 		t.Errorf("Marshal() = %s, want newest fitting entry %s", got, newest)
 	}
+}
+
+func mustParseHTML(t *testing.T, value string) entry.HTML {
+	t.Helper()
+
+	html, err := entry.ParseHTML(value)
+	if err != nil {
+		t.Fatalf("ParseHTML() error = %v", err)
+	}
+
+	return html
 }
 
 func TestMarshalRejectsLimitSmallerThanEmptyFeed(t *testing.T) {

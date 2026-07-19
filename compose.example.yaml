@@ -11,6 +11,7 @@ services:
       DB_NAME: feedway
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       DB_PORT: 5432
+      DB_SSLMODE: disable
       DB_USER: feedway
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
     ports:

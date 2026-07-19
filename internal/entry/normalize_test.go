@@ -28,10 +28,10 @@ func TestNormalize(t *testing.T) {
 	if *got.Title != "Daily\nreport" {
 		t.Errorf("Title = %q, want %q", *got.Title, "Daily\nreport")
 	}
-	if got.ContentHTML != "<p>one\ntwo   three</p>" {
+	if got.ContentHTML.String() != "<p>one\ntwo   three</p>" {
 		t.Errorf(
 			"ContentHTML = %q, want %q",
-			got.ContentHTML,
+			got.ContentHTML.String(),
 			"<p>one\ntwo   three</p>",
 		)
 	}
@@ -70,15 +70,15 @@ func TestNormalize_SanitizesUntrustedHTML(t *testing.T) {
 		"<style",
 		`style="`,
 	} {
-		if strings.Contains(got.ContentHTML, unsafe) {
-			t.Errorf("ContentHTML contains unsafe %q: %q", unsafe, got.ContentHTML)
+		if strings.Contains(got.ContentHTML.String(), unsafe) {
+			t.Errorf("ContentHTML contains unsafe %q: %q", unsafe, got.ContentHTML.String())
 		}
 	}
 	if !strings.Contains(
-		got.ContentHTML,
+		got.ContentHTML.String(),
 		`<a href="https://example.com" rel="nofollow">safe</a>`,
 	) {
-		t.Errorf("ContentHTML does not preserve the safe link: %q", got.ContentHTML)
+		t.Errorf("ContentHTML does not preserve the safe link: %q", got.ContentHTML.String())
 	}
 }
 
@@ -144,8 +144,24 @@ func TestNormalize_AcceptsLimits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
-	if len(got.ContentHTML) != 256*1024 {
-		t.Errorf("ContentHTML size = %d, want %d", len(got.ContentHTML), 256*1024)
+	if len(got.ContentHTML.String()) != 256*1024 {
+		t.Errorf("ContentHTML size = %d, want %d", len(got.ContentHTML.String()), 256*1024)
+	}
+}
+
+func TestParseHTML(t *testing.T) {
+	t.Parallel()
+
+	got, err := entry.ParseHTML(`<p>safe</p>`)
+	if err != nil {
+		t.Fatalf("ParseHTML() error = %v", err)
+	}
+	if got.String() != `<p>safe</p>` {
+		t.Errorf("ParseHTML() = %q, want %q", got.String(), `<p>safe</p>`)
+	}
+
+	if _, err := entry.ParseHTML(`<script>alert(1)</script>`); err == nil {
+		t.Fatal("ParseHTML() unsafe error = nil, want an error")
 	}
 }
 

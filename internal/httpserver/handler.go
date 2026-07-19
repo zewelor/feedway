@@ -103,9 +103,8 @@ func entryPage(load loadEntry, logger *slog.Logger) http.HandlerFunc {
 
 		var body bytes.Buffer
 		if err := entryPageTemplate.Execute(&body, entryPageData{
-			Title: published.Title,
-			// ContentHTML is sanitized before it is stored.
-			ContentHTML: template.HTML(published.ContentHTML),
+			Title:       published.Title,
+			ContentHTML: template.HTML(published.ContentHTML.String()),
 		}); err != nil {
 			logger.ErrorContext(request.Context(), "render entry", "error", err)
 			http.Error(response, "internal server error", http.StatusInternalServerError)
@@ -133,11 +132,6 @@ func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {
 			writeError(response, http.StatusInternalServerError, "internal server error")
 			return
 		}
-		if len(body) > maxFeedBytes {
-			writeError(response, http.StatusUnprocessableEntity, "feed is too large")
-			return
-		}
-
 		hash := sha256.Sum256(body)
 		etag := fmt.Sprintf(`"%x"`, hash)
 		response.Header().Set("Content-Type", "application/feed+json; charset=utf-8")

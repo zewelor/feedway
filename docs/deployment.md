@@ -46,10 +46,11 @@ Only values that differ between deployment environments are configurable:
 | `DB_PASSWORD` | yes | — | PostgreSQL password |
 | `DB_HOST` | yes | — | PostgreSQL host |
 | `DB_PORT` | no | `5432` | PostgreSQL port |
+| `DB_SSLMODE` | no | `disable` | PostgreSQL TLS mode: `disable`, `require`, `verify-ca`, or `verify-full` |
 | `DB_NAME` | yes | — | PostgreSQL database |
 | `DB_USER` | yes | — | PostgreSQL user |
 | `HTTP_PORT` | no | `80` | HTTP listen port inside the container |
-| `RETENTION_DAYS` | no | `30` | Days to retain entries |
+| `RETENTION_DAYS` | no | `30` | Days to retain entries, from 1 to 36,500 |
 
 `API_TOKEN` must be exactly 64 hexadecimal characters. Generate one with:
 
@@ -62,7 +63,9 @@ Set `BASE_URL` to Feedway's public origin, for example
 entry permalinks remain relative.
 
 The feed size, request size, item count, timeouts, and cleanup interval are
-application conventions, not configuration.
+application conventions, not configuration. Feedway configures an 8 KiB HTTP
+header limit, 5-second header-read timeout, 15-second read and write timeouts,
+60-second idle timeout, and 15-second graceful-shutdown timeout.
 
 ## External PostgreSQL
 
@@ -71,6 +74,11 @@ orchestrator, run only the stateless Feedway container and provide the `DB_*`
 values for an existing PostgreSQL 18 service. The Compose PostgreSQL service is
 a convenience for a small installation, not a requirement of the application
 image.
+
+The Compose example uses `DB_SSLMODE=disable` on its private container network.
+For an external PostgreSQL service, set `DB_SSLMODE` to the mode required by the
+provider; prefer `verify-full` when its certificate chain and hostname support
+verification.
 
 Feedway does not include Kubernetes manifests. Connect it to the database using
 the conventions of the platform you already operate.

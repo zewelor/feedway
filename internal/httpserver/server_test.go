@@ -2,7 +2,6 @@ package httpserver
 
 import (
 	"context"
-	"errors"
 	"net"
 	"net/http"
 	"testing"
@@ -27,6 +26,11 @@ func TestServeShutsDownWhenContextIsCancelled(t *testing.T) {
 		database: pinger{},
 	}
 	result := make(chan error, 1)
+	t.Cleanup(func() {
+		cancel()
+		_ = server.Close()
+		_ = listener.Close()
+	})
 	go func() {
 		result <- serve(ctx, server, listener, readiness)
 	}()
@@ -54,7 +58,4 @@ func TestServeShutsDownWhenContextIsCancelled(t *testing.T) {
 		t.Fatal("readiness was not disabled")
 	}
 
-	if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		t.Fatalf("close server: %v", err)
-	}
 }

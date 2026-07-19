@@ -3,15 +3,20 @@ package config
 import (
 	"encoding/hex"
 	"errors"
+	"net/url"
 	"strconv"
 	"strings"
 )
 
 const (
-	defaultDatabasePort  = 5432
-	defaultHTTPPort      = 80
-	defaultRetentionDays = 30
-	apiTokenLength       = 64
+	defaultDatabasePort    = 5432
+	defaultDatabaseSSLMode = "disable"
+	defaultHTTPPort        = 80
+	defaultRetentionDays   = 30
+	// maxRetentionDays is an intentionally arbitrary 100-year guardrail, not a PostgreSQL limit.
+	// It rejects obviously accidental values while allowing effectively indefinite retention.
+	maxRetentionDays = 36500
+	apiTokenLength   = 64
 )
 
 type Config struct {
@@ -22,6 +27,7 @@ type Config struct {
 	DBName        string
 	DBUser        string
 	DBPassword    string
+	DBSSLMode     string
 	APIToken      string
 	RetentionDays int
 }
@@ -38,7 +44,10 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 		return Config{}, err
 	}
 	apiToken, _ := lookupEnv("API_TOKEN")
-	baseURL, _ := lookupEnv("BASE_URL")
+	baseURL, err := loadBaseURL(lookupEnv)
+	if err != nil {
+		return Config{}, err
+	}
 
 	if len(apiToken) != apiTokenLength {
 		return Config{}, errors.New("API_TOKEN must be 64 hexadecimal characters")
@@ -53,12 +62,13 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 
 	return Config{
 		HTTPPort:      httpPort,
-		BaseURL:       strings.TrimRight(baseURL, "/"),
+		BaseURL:       baseURL,
 		DBHost:        database.host,
 		DBPort:        database.port,
 		DBName:        database.name,
 		DBUser:        database.user,
 		DBPassword:    database.password,
+		DBSSLMode:     database.sslMode,
 		APIToken:      apiToken,
 		RetentionDays: retentionDays,
 	}, nil
@@ -70,6 +80,7 @@ type databaseConfig struct {
 	name     string
 	user     string
 	password string
+	sslMode  string
 }
 
 func loadDatabase(lookupEnv LookupEnv) (databaseConfig, error) {
@@ -97,6 +108,10 @@ func loadDatabase(lookupEnv LookupEnv) (databaseConfig, error) {
 	if err != nil {
 		return databaseConfig{}, err
 	}
+	sslMode, err := loadDatabaseSSLMode(lookupEnv)
+	if err != nil {
+		return databaseConfig{}, err
+	}
 
 	return databaseConfig{
 		host:     host,
@@ -104,7 +119,43 @@ func loadDatabase(lookupEnv LookupEnv) (databaseConfig, error) {
 		name:     name,
 		user:     user,
 		password: password,
+		sslMode:  sslMode,
 	}, nil
+}
+
+func loadBaseURL(lookupEnv LookupEnv) (string, error) {
+	value, _ := lookupEnv("BASE_URL")
+	if value == "" {
+		return "", nil
+	}
+
+	parsed, err := url.Parse(value)
+	if err == nil {
+		parsed.Scheme = strings.ToLower(parsed.Scheme)
+	}
+	hasOrigin := err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+	hasOnlyOrigin := hasOrigin && parsed.User == nil && !parsed.ForceQuery && parsed.RawQuery == "" && parsed.Fragment == "" &&
+		(parsed.Path == "" || parsed.Path == "/")
+	if !hasOnlyOrigin {
+		return "", errors.New("BASE_URL must be an HTTP or HTTPS origin")
+	}
+
+	parsed.Path = ""
+	return parsed.String(), nil
+}
+
+func loadDatabaseSSLMode(lookupEnv LookupEnv) (string, error) {
+	value, _ := lookupEnv("DB_SSLMODE")
+	if value == "" {
+		return defaultDatabaseSSLMode, nil
+	}
+
+	switch value {
+	case "disable", "require", "verify-ca", "verify-full":
+		return value, nil
+	default:
+		return "", errors.New("DB_SSLMODE must be disable, require, verify-ca, or verify-full")
+	}
 }
 
 func loadPort(lookupEnv LookupEnv, name string, defaultPort uint16) (uint16, error) {
@@ -128,8 +179,8 @@ func loadRetentionDays(lookupEnv LookupEnv) (int, error) {
 	}
 
 	days, err := strconv.Atoi(value)
-	if err != nil || days < 1 {
-		return 0, errors.New("RETENTION_DAYS must be a positive integer")
+	if err != nil || days < 1 || days > maxRetentionDays {
+		return 0, errors.New("RETENTION_DAYS must be between 1 and 36500")
 	}
 
 	return days, nil

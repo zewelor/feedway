@@ -17,6 +17,7 @@ var testConfig = Config{
 	Name:     "feedway_test",
 	User:     "feedway",
 	Password: "feedway_test",
+	SSLMode:  "disable",
 }
 
 func TestPrepare(t *testing.T) {
@@ -65,6 +66,7 @@ func TestOpenUnavailableDatabase(t *testing.T) {
 			Name:     "feedway_test",
 			User:     "feedway",
 			Password: "feedway_test",
+			SSLMode:  "disable",
 		},
 	)
 	if pool != nil {
@@ -187,8 +189,8 @@ func TestGetEntry(t *testing.T) {
 	if published.Title == nil || *published.Title != "title" {
 		t.Errorf("Title = %v, want title", published.Title)
 	}
-	if published.ContentHTML != "<p>content</p>" {
-		t.Errorf("ContentHTML = %q, want <p>content</p>", published.ContentHTML)
+	if published.ContentHTML.String() != "<p>content</p>" {
+		t.Errorf("ContentHTML = %q, want <p>content</p>", published.ContentHTML.String())
 	}
 	if published.CreatedAt.IsZero() {
 		t.Error("CreatedAt is zero")
@@ -200,6 +202,41 @@ func TestGetEntry(t *testing.T) {
 	}
 	if found {
 		t.Fatal("GetEntry() missing found = true, want false")
+	}
+}
+
+func TestGetEntryRejectsUnsanitizedHTML(t *testing.T) {
+	pool, err := Open(t.Context(), testConfig)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	if err := Prepare(t.Context(), pool); err != nil {
+		t.Fatalf("Prepare() error = %v", err)
+	}
+	if _, err := pool.Exec(t.Context(), "TRUNCATE entries"); err != nil {
+		t.Fatalf("truncate entries: %v", err)
+	}
+
+	const id = "sha256-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if _, err := pool.Exec(
+		t.Context(),
+		`
+			INSERT INTO entries (id, content_html)
+			VALUES ($1, '<script>alert(1)</script>')
+		`,
+		id,
+	); err != nil {
+		t.Fatalf("insert unsafe entry: %v", err)
+	}
+
+	_, found, err := GetEntry(t.Context(), pool, id)
+	if err == nil || !strings.Contains(err.Error(), "validate entry content") {
+		t.Fatalf("GetEntry() error = %v, want content validation error", err)
+	}
+	if found {
+		t.Fatal("GetEntry() found = true, want false")
 	}
 }
 
@@ -245,8 +282,8 @@ func TestListEntriesReturnsNewestHundred(t *testing.T) {
 	if entries[0].Title == nil || *entries[0].Title != "newest by id" {
 		t.Errorf("first title = %v, want newest by id", entries[0].Title)
 	}
-	if entries[0].ContentHTML != "<p>101</p>" {
-		t.Errorf("first content_html = %q, want %q", entries[0].ContentHTML, "<p>101</p>")
+	if entries[0].ContentHTML.String() != "<p>101</p>" {
+		t.Errorf("first content_html = %q, want %q", entries[0].ContentHTML.String(), "<p>101</p>")
 	}
 	if entries[1].Title == nil || *entries[1].Title != "second by id" {
 		t.Errorf("second title = %v, want second by id", entries[1].Title)

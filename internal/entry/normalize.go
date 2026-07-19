@@ -21,7 +21,15 @@ var htmlPolicy = bluemonday.UGCPolicy()
 type Values struct {
 	ID          string
 	Title       *string
-	ContentHTML string
+	ContentHTML HTML
+}
+
+type HTML struct {
+	value string
+}
+
+func (h HTML) String() string {
+	return h.value
 }
 
 func Normalize(title, contentHTML string) (Values, error) {
@@ -54,8 +62,22 @@ func Normalize(title, contentHTML string) (Values, error) {
 	return Values{
 		ID:          contentID(title, contentHTML),
 		Title:       normalizedTitle,
-		ContentHTML: contentHTML,
+		ContentHTML: HTML{value: contentHTML},
 	}, nil
+}
+
+func ParseHTML(contentHTML string) (HTML, error) {
+	if contentHTML == "" {
+		return HTML{}, errors.New("content_html is required")
+	}
+	if len(contentHTML) > maxContentHTMLBytes {
+		return HTML{}, errors.New("content_html must not exceed 256 KiB")
+	}
+	if strings.TrimSpace(htmlPolicy.Sanitize(contentHTML)) != contentHTML {
+		return HTML{}, errors.New("content_html is not sanitized")
+	}
+
+	return HTML{value: contentHTML}, nil
 }
 
 func contentID(title, contentHTML string) string {

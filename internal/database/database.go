@@ -5,6 +5,9 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -23,19 +26,14 @@ type Config struct {
 	Name     string
 	User     string
 	Password string
+	SSLMode  string
 }
 
 func Open(ctx context.Context, database Config) (*pgxpool.Pool, error) {
-	config, err := pgxpool.ParseConfig("")
+	config, err := poolConfig(database)
 	if err != nil {
-		return nil, fmt.Errorf("parse database configuration: %w", err)
+		return nil, err
 	}
-	config.ConnConfig.Host = database.Host
-	config.ConnConfig.Port = database.Port
-	config.ConnConfig.Database = database.Name
-	config.ConnConfig.User = database.User
-	config.ConnConfig.Password = database.Password
-	config.MaxConns = 4
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -50,6 +48,27 @@ func Open(ctx context.Context, database Config) (*pgxpool.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+func poolConfig(database Config) (*pgxpool.Config, error) {
+	connectionURL := &url.URL{
+		Scheme:  "postgres",
+		User:    url.UserPassword(database.User, database.Password),
+		Host:    net.JoinHostPort(database.Host, strconv.Itoa(int(database.Port))),
+		Path:    "/" + database.Name,
+		RawPath: "/" + url.PathEscape(database.Name),
+	}
+	query := connectionURL.Query()
+	query.Set("sslmode", database.SSLMode)
+	connectionURL.RawQuery = query.Encode()
+
+	config, err := pgxpool.ParseConfig(connectionURL.String())
+	if err != nil {
+		return nil, fmt.Errorf("parse database configuration: %w", err)
+	}
+	config.MaxConns = 4
+
+	return config, nil
 }
 
 func Prepare(ctx context.Context, pool *pgxpool.Pool) error {
@@ -76,7 +95,7 @@ func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (
 		`,
 		values.ID,
 		values.Title,
-		values.ContentHTML,
+		values.ContentHTML.String(),
 	)
 	if err != nil {
 		return false, fmt.Errorf("insert entry: %w", err)
@@ -89,7 +108,10 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 	getCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
-	var published entry.Published
+	var (
+		published   entry.Published
+		contentHTML string
+	)
 	err := pool.QueryRow(
 		getCtx,
 		`
@@ -101,7 +123,7 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 	).Scan(
 		&published.ID,
 		&published.Title,
-		&published.ContentHTML,
+		&contentHTML,
 		&published.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -109,6 +131,10 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 	}
 	if err != nil {
 		return entry.Published{}, false, fmt.Errorf("get entry: %w", err)
+	}
+	published.ContentHTML, err = entry.ParseHTML(contentHTML)
+	if err != nil {
+		return entry.Published{}, false, fmt.Errorf("validate entry content: %w", err)
 	}
 
 	return published, true, nil
@@ -134,14 +160,21 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, er
 
 	entries := make([]entry.Published, 0)
 	for rows.Next() {
-		var published entry.Published
+		var (
+			published   entry.Published
+			contentHTML string
+		)
 		if err := rows.Scan(
 			&published.ID,
 			&published.Title,
-			&published.ContentHTML,
+			&contentHTML,
 			&published.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan entry: %w", err)
+		}
+		published.ContentHTML, err = entry.ParseHTML(contentHTML)
+		if err != nil {
+			return nil, fmt.Errorf("validate entry content: %w", err)
 		}
 		entries = append(entries, published)
 	}

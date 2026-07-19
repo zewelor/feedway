@@ -478,6 +478,10 @@ func TestEntryPage(t *testing.T) {
 	t.Parallel()
 
 	title := "<Daily & report>"
+	contentHTML, err := entry.ParseHTML("<p>content</p>")
+	if err != nil {
+		t.Fatalf("ParseHTML() error = %v", err)
+	}
 	const pageWithTitle = `<!doctype html>
 <html>
 <head>
@@ -524,7 +528,7 @@ func TestEntryPage(t *testing.T) {
 			method: http.MethodGet,
 			published: entry.Published{
 				Title:       &title,
-				ContentHTML: "<p>content</p>",
+				ContentHTML: contentHTML,
 			},
 			found:          true,
 			expectedStatus: http.StatusOK,
@@ -535,7 +539,7 @@ func TestEntryPage(t *testing.T) {
 			name:   "entry without title",
 			method: http.MethodGet,
 			published: entry.Published{
-				ContentHTML: "<p>content</p>",
+				ContentHTML: contentHTML,
 			},
 			found:          true,
 			expectedStatus: http.StatusOK,
@@ -547,7 +551,7 @@ func TestEntryPage(t *testing.T) {
 			method: http.MethodHead,
 			published: entry.Published{
 				Title:       &title,
-				ContentHTML: "<p>content</p>",
+				ContentHTML: contentHTML,
 			},
 			found:          true,
 			expectedStatus: http.StatusOK,
@@ -689,16 +693,6 @@ func TestFeed(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   strings.Repeat("x", maxFeedBytes),
 			expectedLength: maxFeedBytes,
-		},
-		{
-			name:   "too large",
-			method: http.MethodGet,
-			path:   "/feed.json",
-			load: func(context.Context) ([]byte, error) {
-				return []byte(strings.Repeat("x", maxFeedBytes+1)), nil
-			},
-			expectedStatus: http.StatusUnprocessableEntity,
-			expectedError:  "feed is too large",
 		},
 		{
 			name:   "load error",

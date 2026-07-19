@@ -36,6 +36,7 @@ func run() error {
 		Name:     configuration.DBName,
 		User:     configuration.DBUser,
 		Password: configuration.DBPassword,
+		SSLMode:  configuration.DBSSLMode,
 	})
 	if err != nil {
 		return err

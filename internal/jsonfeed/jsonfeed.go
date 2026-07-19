@@ -40,7 +40,7 @@ func Marshal(entries []entry.Published, baseURL string, maxBytes int) ([]byte, e
 			ID:            published.ID,
 			URL:           baseURL + "/entries/" + published.ID,
 			Title:         published.Title,
-			ContentHTML:   published.ContentHTML,
+			ContentHTML:   published.ContentHTML.String(),
 			DatePublished: published.CreatedAt.UTC().Format(time.RFC3339Nano),
 		}
 		encoded, err := json.Marshal(candidate)
