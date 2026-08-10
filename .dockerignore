@@ -1,16 +1,28 @@
-.git
-.github
-.githooks
-.agents
-.codex
-.env*
-.dockerignore
-.markdownlint.json
-.gitignore
-AGENTS.md
-Dockerfile
+# Ignore all hidden files and directories (.git, .github, .vscode, .env)
+.*
+
+# Documentation and repository config
+*.md
+docs/
+Dockerfile*
+compose*.yaml
+compose*.yml
+docker-compose*.yml
+justfile
 Justfile
-README.md
-compose.*.yaml
-docs
 skills-lock.json
+
+# Local binaries, test artifacts, and build outputs
+*.test
+*.prof
+tmp/
+dist/
+coverage/
+*.log
+data/
+
+# NOTE: Do NOT ignore *_test.go files here! (Required by Dockerfile validate stage)
+
+# Local binary
+feedway
+
