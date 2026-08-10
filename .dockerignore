@@ -9,7 +9,6 @@ compose*.yaml
 compose*.yml
 docker-compose*.yml
 justfile
-Justfile
 skills-lock.json
 
 # Local binaries, test artifacts, and build outputs
@@ -25,4 +24,3 @@ data/
 
 # Local binary
 feedway
-
