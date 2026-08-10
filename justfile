@@ -56,7 +56,7 @@ ci: ci-checks
     docker build .
 
 # Preview the files included in the Docker build context.
-test_dockerignore:
+show_dockerignore:
     #!/bin/sh
     set -eu
     LC_ALL=C
