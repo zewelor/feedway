@@ -19,6 +19,9 @@ Successful health and readiness probes are not logged. Other requests use
 structured JSON logs containing the method, requested path, status, and
 duration. The path excludes the query string.
 
+When PostgreSQL makes readiness fail, Feedway also writes a `readiness check
+failed` warning with the underlying database error before the request log.
+
 With Docker Compose, follow the Feedway logs with:
 
 ```bash

@@ -45,6 +45,10 @@ small public surface, and few operator decisions.
   `ghcr.io/zewelor/feedway:latest`; CI also publishes a full-commit-SHA tag.
 - Reference GitHub Actions by major tag, for example `actions/checkout@v7`.
 - Record Go tools with `go get -tool`. Justify every additional runtime dependency in review.
+- For a Go patch upgrade, verify the latest stable official `golang:<version>-trixie` multi-platform image, update its
+  version and index digest together in `Dockerfile`, and run `just ci`, including `govulncheck`. Publishing is a
+  separately authorized sequence: commit and push to `main`, wait for CI to publish the commit-SHA image, create the
+  Feedway version tag and GitHub Release at that green commit, then update GitOps to the published image digest.
 
 ## Change discipline
 

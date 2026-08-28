@@ -307,21 +307,23 @@ func TestReadiness(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		databaseError  error
-		isShuttingDown bool
-		expectedStatus int
-		expectLog      bool
+		name                   string
+		databaseError          error
+		isShuttingDown         bool
+		expectedStatus         int
+		expectLog              bool
+		expectedReadinessError string
 	}{
 		{
 			name:           "ready",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "database unavailable",
-			databaseError:  errors.New("database unavailable"),
-			expectedStatus: http.StatusServiceUnavailable,
-			expectLog:      true,
+			name:                   "database unavailable",
+			databaseError:          errors.New("database unavailable"),
+			expectedStatus:         http.StatusServiceUnavailable,
+			expectLog:              true,
+			expectedReadinessError: "database unavailable",
 		},
 		{
 			name:           "shutting down",
@@ -335,11 +337,12 @@ func TestReadiness(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&logs, nil))
 			readiness := &readiness{
 				database: pinger{err: test.databaseError},
 			}
 			readiness.isShuttingDown.Store(test.isShuttingDown)
-			var logs bytes.Buffer
 			request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 			response := httptest.NewRecorder()
 
@@ -351,7 +354,7 @@ func TestReadiness(t *testing.T) {
 				},
 				testEntry,
 				testFeed,
-				slog.New(slog.NewJSONHandler(&logs, nil)),
+				logger,
 			).ServeHTTP(response, request)
 
 			if response.Code != test.expectedStatus {
@@ -362,6 +365,12 @@ func TestReadiness(t *testing.T) {
 			}
 			if !test.expectLog && logs.Len() != 0 {
 				t.Fatalf("logs = %q, want no access log", logs.String())
+			}
+			if test.expectedReadinessError != "" && !strings.Contains(
+				logs.String(),
+				`"msg":"readiness check failed","error":"`+test.expectedReadinessError+`"`,
+			) {
+				t.Fatalf("logs = %q, want readiness error %q", logs.String(), test.expectedReadinessError)
 			}
 		})
 	}

@@ -77,7 +77,7 @@ func newHandler(
 ) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", health)
-	mux.HandleFunc("GET /readyz", readiness.handle)
+	mux.HandleFunc("GET /readyz", readiness.handle(logger))
 	mux.Handle("POST /api/v1/entries", authenticate(
 		apiToken,
 		requireJSON(http.HandlerFunc(entries(publish, logger))),
@@ -160,18 +160,21 @@ func health(response http.ResponseWriter, _ *http.Request) {
 	response.WriteHeader(http.StatusOK)
 }
 
-func (r *readiness) handle(response http.ResponseWriter, request *http.Request) {
-	if r.isShuttingDown.Load() {
-		writeError(response, http.StatusServiceUnavailable, "not ready")
-		return
-	}
+func (r *readiness) handle(logger *slog.Logger) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		if r.isShuttingDown.Load() {
+			writeError(response, http.StatusServiceUnavailable, "not ready")
+			return
+		}
 
-	if err := pingDatabase(request.Context(), r.database, readinessTimeout); err != nil {
-		writeError(response, http.StatusServiceUnavailable, "not ready")
-		return
-	}
+		if err := pingDatabase(request.Context(), r.database, readinessTimeout); err != nil {
+			logger.WarnContext(request.Context(), "readiness check failed", "error", err)
+			writeError(response, http.StatusServiceUnavailable, "not ready")
+			return
+		}
 
-	response.WriteHeader(http.StatusOK)
+		response.WriteHeader(http.StatusOK)
+	}
 }
 
 func pingDatabase(ctx context.Context, database databasePinger, timeout time.Duration) error {
