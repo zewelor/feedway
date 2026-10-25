@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"unicode/utf8"
@@ -22,6 +23,7 @@ type Values struct {
 	ID          string
 	Title       *string
 	ContentHTML HTML
+	DataJSON    JSON
 }
 
 type HTML struct {
@@ -32,7 +34,7 @@ func (h HTML) String() string {
 	return h.value
 }
 
-func Normalize(title, contentHTML string) (Values, error) {
+func Normalize(title, contentHTML string, dataJSON json.RawMessage) (Values, error) {
 	title = normalizeWhitespace(title)
 	if utf8.RuneCountInString(title) > maxTitleCharacters {
 		return Values{}, errors.New("title must not exceed 1000 characters")
@@ -58,11 +60,16 @@ func Normalize(title, contentHTML string) (Values, error) {
 	if title != "" {
 		normalizedTitle = &title
 	}
+	data, err := parseJSON(dataJSON)
+	if err != nil {
+		return Values{}, err
+	}
 
 	return Values{
 		ID:          contentID(title, contentHTML),
 		Title:       normalizedTitle,
 		ContentHTML: HTML{value: contentHTML},
+		DataJSON:    data,
 	}, nil
 }
 

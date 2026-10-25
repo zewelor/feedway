@@ -92,7 +92,7 @@ func TestInsertEntryDeduplicatesConcurrentWrites(t *testing.T) {
 		t.Fatalf("truncate entries: %v", err)
 	}
 
-	values, err := entry.Normalize("title", "<p>content</p>")
+	values, err := entry.Normalize("title", "<p>content</p>", nil)
 	if err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}

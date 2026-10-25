@@ -38,24 +38,7 @@ func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Lo
 		database: pool,
 	}
 	server := &http.Server{
-		Handler: newHandler(
-			config.APIToken,
-			readiness,
-			func(ctx context.Context, values entry.Values) (bool, error) {
-				return database.InsertEntry(ctx, pool, values)
-			},
-			func(ctx context.Context, id string) (entry.Published, bool, error) {
-				return database.GetEntry(ctx, pool, id)
-			},
-			func(ctx context.Context) ([]byte, error) {
-				entries, err := database.ListEntries(ctx, pool)
-				if err != nil {
-					return nil, err
-				}
-				return jsonfeed.Marshal(entries, config.BaseURL, maxFeedBytes)
-			},
-			logger,
-		),
+		Handler:           databaseHandler(config, pool, readiness, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -64,6 +47,30 @@ func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Lo
 	}
 
 	return serve(ctx, server, listener, readiness)
+}
+
+func databaseHandler(config Config, pool *pgxpool.Pool, readiness *readiness, logger *slog.Logger) http.Handler {
+	return newHandler(
+		config.APIToken,
+		readiness,
+		func(ctx context.Context, values entry.Values) (bool, error) {
+			return database.InsertEntry(ctx, pool, values)
+		},
+		func(ctx context.Context, id string) (entry.Published, bool, error) {
+			return database.GetEntry(ctx, pool, id)
+		},
+		func(ctx context.Context, id string) ([]byte, bool, error) {
+			return database.GetEntryData(ctx, pool, id)
+		},
+		func(ctx context.Context) ([]byte, error) {
+			entries, err := database.ListEntries(ctx, pool)
+			if err != nil {
+				return nil, err
+			}
+			return jsonfeed.Marshal(entries, config.BaseURL, maxFeedBytes)
+		},
+		logger,
+	)
 }
 
 func serve(

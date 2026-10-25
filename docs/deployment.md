@@ -43,6 +43,30 @@ also publishes an immutable full-commit-SHA image tag.
 
 ## Configuration
 
+### Upgrading an existing database
+
+Feedway prepares its schema at application startup. The structured-data upgrade
+adds a nullable `data_json` column to the existing `entries` table using
+`ADD COLUMN IF NOT EXISTS`; existing IDs, content, and timestamps are preserved.
+The column uses PostgreSQL `json` to retain numeric tokens and JSON escapes
+without imposing `jsonb` numeric or Unicode storage restrictions. Feedway does
+not query or index fields inside these documents.
+
+The database user must own the table or otherwise have permission to alter it.
+Take a database backup before upgrading. Schema preparation uses the existing
+five-second timeout; lock contention or insufficient privileges fails startup
+visibly. Resolve the cause before restarting the application.
+
+The column is optional, so the previous application can still read and publish
+HTML-only entries against the upgraded database. Keep the column when rolling
+back; the previous version does not serve its attachments. Removing the column
+would destroy stored JSON and requires a separate decision.
+
+The application needs no persistent disk, upload directory, or extra service
+for attachments. JSON stays in PostgreSQL across application restarts.
+
+### Environment variables
+
 Only values that differ between deployment environments are configurable:
 
 | Variable | Required | Default | Purpose |

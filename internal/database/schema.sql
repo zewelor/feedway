@@ -18,3 +18,6 @@ CREATE TABLE IF NOT EXISTS entries (
 
 CREATE INDEX IF NOT EXISTS entries_created_index
     ON entries(created_at DESC, id DESC);
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS data_json json
+    CHECK (octet_length(data_json::text) <= 262144);

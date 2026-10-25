@@ -29,8 +29,9 @@ type errorResponse struct {
 }
 
 type entryRequest struct {
-	Title       string `json:"title"`
-	ContentHTML string `json:"content_html"`
+	Title       string          `json:"title"`
+	ContentHTML string          `json:"content_html"`
+	DataJSON    json.RawMessage `json:"data_json"`
 }
 
 type entryResponse struct {
@@ -65,6 +66,7 @@ type databasePinger interface {
 
 type publishEntry func(context.Context, entry.Values) (bool, error)
 type loadEntry func(context.Context, string) (entry.Published, bool, error)
+type loadEntryData func(context.Context, string) ([]byte, bool, error)
 type loadFeed func(context.Context) ([]byte, error)
 
 func newHandler(
@@ -72,6 +74,7 @@ func newHandler(
 	readiness *readiness,
 	publish publishEntry,
 	loadOne loadEntry,
+	loadData loadEntryData,
 	load loadFeed,
 	logger *slog.Logger,
 ) http.Handler {
@@ -83,9 +86,35 @@ func newHandler(
 		requireJSON(http.HandlerFunc(entries(publish, logger))),
 	))
 	mux.HandleFunc("GET /entries/{id}", entryPage(loadOne, logger))
+	mux.HandleFunc("GET /entries/{id}/data.json", entryData(loadData, logger))
 	mux.HandleFunc("GET /feed.json", feed(load, logger))
 
 	return logRequests(logger, mux)
+}
+
+func entryData(load loadEntryData, logger *slog.Logger) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		body, found, err := load(request.Context(), request.PathValue("id"))
+		if err != nil {
+			logger.ErrorContext(request.Context(), "load entry data", "error", err)
+			http.Error(response, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		if !found {
+			http.NotFound(response, request)
+			return
+		}
+		response.Header().Set("Content-Type", "application/json; charset=utf-8")
+		response.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		response.Header().Set("X-Content-Type-Options", "nosniff")
+		response.WriteHeader(http.StatusOK)
+		if request.Method == http.MethodHead {
+			return
+		}
+		if _, err := response.Write(body); err != nil {
+			return
+		}
+	}
 }
 
 func entryPage(load loadEntry, logger *slog.Logger) http.HandlerFunc {
@@ -198,7 +227,7 @@ func entries(publish publishEntry, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
-		values, err := entry.Normalize(input.Title, input.ContentHTML)
+		values, err := entry.Normalize(input.Title, input.ContentHTML, input.DataJSON)
 		if err != nil {
 			writeError(response, http.StatusUnprocessableEntity, err.Error())
 			return

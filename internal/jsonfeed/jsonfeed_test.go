@@ -1,6 +1,7 @@
 package jsonfeed_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -125,5 +126,51 @@ func TestMarshalRejectsLimitSmallerThanEmptyFeed(t *testing.T) {
 
 	if _, err := jsonfeed.Marshal(nil, "", 1); err == nil {
 		t.Fatal("Marshal() error = nil, want size limit error")
+	}
+}
+
+func TestMarshalDataAttachments(t *testing.T) {
+	t.Parallel()
+	for _, baseURL := range []string{"", "https://feed.example.com"} {
+		t.Run(baseURL, func(t *testing.T) {
+			t.Parallel()
+			entries := []entry.Published{
+				{ID: "with-data", ContentHTML: mustParseHTML(t, "<p>report</p>"), HasDataJSON: true},
+				{ID: "without-data", ContentHTML: mustParseHTML(t, "<p>legacy</p>")},
+			}
+			body, err := jsonfeed.Marshal(entries, baseURL, 4096)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var feed struct {
+				Items []struct {
+					Attachments []struct {
+						URL      string `json:"url"`
+						MIMEType string `json:"mime_type"`
+					} `json:"attachments"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal(body, &feed); err != nil {
+				t.Fatal(err)
+			}
+			if len(feed.Items) != 2 || len(feed.Items[0].Attachments) != 1 || len(feed.Items[1].Attachments) != 0 {
+				t.Fatalf("unexpected attachments: %s", body)
+			}
+			attachment := feed.Items[0].Attachments[0]
+			if attachment.URL != baseURL+"/entries/with-data/data.json" || attachment.MIMEType != "application/json" {
+				t.Errorf("attachment = %+v", attachment)
+			}
+			newest, err := jsonfeed.Marshal(entries[:1], baseURL, len(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			limited, err := jsonfeed.Marshal(entries, baseURL, len(newest))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(limited) != string(newest) {
+				t.Errorf("size limit omitted or split an attachment: %s", limited)
+			}
+		})
 	}
 }

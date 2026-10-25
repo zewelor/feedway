@@ -13,6 +13,7 @@ func TestNormalize(t *testing.T) {
 	got, err := entry.Normalize(
 		"  Daily\rreport  ",
 		" \r\n<p>one\r\ntwo   three</p>\r ",
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Normalize() error = %v", err)
@@ -40,7 +41,7 @@ func TestNormalize(t *testing.T) {
 func TestNormalize_EmptyTitleBecomesNil(t *testing.T) {
 	t.Parallel()
 
-	got, err := entry.Normalize(" \r\n ", "<p>content</p>")
+	got, err := entry.Normalize(" \r\n ", "<p>content</p>", nil)
 	if err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
@@ -58,6 +59,7 @@ func TestNormalize_SanitizesUntrustedHTML(t *testing.T) {
 			`<p style="color: red" onclick="alert(1)">Hello<script>alert(1)</script>`+
 			`<a href="javascript:alert(1)">bad</a>`+
 			`<a href="https://example.com">safe</a></p>`,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Normalize() error = %v", err)
@@ -123,7 +125,7 @@ func TestNormalize_ValidatesInput(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := entry.Normalize(tt.title, tt.contentHTML)
+			_, err := entry.Normalize(tt.title, tt.contentHTML, nil)
 			if err == nil {
 				t.Fatal("Normalize() error = nil, want an error")
 			}
@@ -140,6 +142,7 @@ func TestNormalize_AcceptsLimits(t *testing.T) {
 	got, err := entry.Normalize(
 		strings.Repeat("ą", 1000),
 		strings.Repeat("x", 256*1024),
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("Normalize() error = %v", err)
@@ -171,6 +174,7 @@ func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
 	first, err := entry.Normalize(
 		" title\r\n",
 		`<p onclick="alert(1)">content</p>`,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("first Normalize() error = %v", err)
@@ -178,6 +182,7 @@ func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
 	second, err := entry.Normalize(
 		"title",
 		`<p>content</p>`,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("second Normalize() error = %v", err)
@@ -186,7 +191,7 @@ func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
 		t.Errorf("IDs differ: %q and %q", first.ID, second.ID)
 	}
 
-	changed, err := entry.Normalize("different title", `<p>content</p>`)
+	changed, err := entry.Normalize("different title", `<p>content</p>`, nil)
 	if err != nil {
 		t.Fatalf("changed Normalize() error = %v", err)
 	}
@@ -194,11 +199,11 @@ func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
 		t.Errorf("ID = %q for different final content", first.ID)
 	}
 
-	left, err := entry.Normalize("ab", "c")
+	left, err := entry.Normalize("ab", "c", nil)
 	if err != nil {
 		t.Fatalf("left Normalize() error = %v", err)
 	}
-	right, err := entry.Normalize("a", "bc")
+	right, err := entry.Normalize("a", "bc", nil)
 	if err != nil {
 		t.Fatalf("right Normalize() error = %v", err)
 	}

@@ -1,8 +1,8 @@
 # HTTP API
 
 Feedway exposes one authenticated publishing endpoint, one public JSON Feed,
-public pages for individual entries, and two operational probes. Paths are
-relative to the HTTP origin where the container is published.
+public entry pages and optional JSON attachments, and two operational probes.
+Paths are relative to the HTTP origin where the container is published.
 
 There is exactly one hardcoded feed named `Feedway`. It has no feed identifier,
 feed-management API, landing page, `home_page_url`, or `feed_url`.
@@ -29,8 +29,8 @@ The response also includes:
 WWW-Authenticate: Bearer
 ```
 
-The feed, individual entry pages, and probes are public. Put TLS and any
-additional access control at a reverse proxy when the service is exposed beyond
+The feed, individual entry pages, JSON attachments, and probes are public.
+Put TLS and any additional access control at a reverse proxy when the service is exposed beyond
 a trusted network.
 
 ## Publish an entry
@@ -44,6 +44,7 @@ unknown fields are rejected, and the JSON object contains:
 | --- | --- | --- | --- |
 | `content_html` | yes | 256 KiB before and after sanitization | HTML body of the entry |
 | `title` | no | 1,000 Unicode characters | Entry title |
+| `data_json` | no | 256 KiB | Native JSON value accompanying the entry |
 
 Example:
 
@@ -61,6 +62,7 @@ curl --fail-with-body \
 
 Feedway normalizes line endings and surrounding whitespace, sanitizes the HTML,
 and derives an immutable `sha256-v1:<hex>` ID from the final title and HTML.
+`data_json` does not affect the ID. All requests keep the existing ID algorithm.
 Publishing the same final content again is safe: the first request returns:
 
 ```http
@@ -76,6 +78,52 @@ same ID. Changed content creates a new entry. A producer that needs every run
 to appear separately must include a run date, time, or another occurrence
 marker in the title or content.
 
+### Optional structured data
+
+`data_json` accepts an object, array, string, number, or boolean. For a new entry,
+omitting the field or sending `null` means no attachment. JSON never changes
+the entry ID. Empty objects and arrays are attachments. HTML
+remains required; JSON is never sanitized as HTML or rendered into the entry page.
+
+Example:
+
+```json
+{
+  "title": "Morning briefing",
+  "content_html": "<p>Three systems reported healthy.</p>",
+  "data_json": {
+    "healthy_systems": 3,
+    "sources": ["https://example.org/status"]
+  }
+}
+```
+
+Send a native JSON value, not a string containing serialized JSON. Feedway does
+not require a schema or interpret the document's fields. Its contents are public
+through the attachment endpoint, under the same access model as the HTML page.
+
+Feedway first checks the 256 KiB byte limit, then validates UTF-8 encoding and
+JSON syntax. It stores the JSON value without decoding or reserializing it;
+whitespace inside the value, key order, duplicate keys, number spellings, and
+string escapes are preserved. Feedway does not interpret or normalize them.
+The syntax check also rejects literal NUL bytes. An escaped `\u0000` is valid
+JSON and remains escaped in storage and the attachment response.
+
+### Known deduplication limitation
+
+Only the final title and sanitized HTML identify an entry. Changing, adding,
+or omitting `data_json` while keeping those fields unchanged returns
+`deduplicated` and the same ID. The first successful publication wins: its JSON
+attachment remains unchanged, including when that first entry had no attachment.
+Deduplication never updates stored content or adds or removes an attachment.
+This is a deliberate simplification; a producer that needs a new JSON document
+must also change the final title or HTML, for example with an occurrence marker.
+
+The field limit applies once to the raw JSON value's bytes, including quotes
+and escapes. Data over the limit is rejected, never truncated. The complete
+request must still fit within 1 MiB. Malformed JSON returns `400`; data exceeding
+the field limit or using invalid UTF-8 returns `422`.
+
 Expected error statuses are:
 
 | Status | Meaning |
@@ -84,7 +132,7 @@ Expected error statuses are:
 | `401` | Missing or invalid Bearer token |
 | `413` | Request body exceeds 1 MiB |
 | `415` | Content type is not JSON |
-| `422` | Content is invalid, empty after sanitization, or exceeds a field limit |
+| `422` | HTML or JSON data violates validation rules or a field limit |
 | `500` | Unexpected publishing failure |
 
 Application errors use one JSON shape:
@@ -106,6 +154,24 @@ entries, newest first. The top-level object contains `version`, `title`, and
 `items`; each item contains `id`, `url`, `content_html`, `date_published`, and
 an optional `title`. When `BASE_URL` is set, `url` is an absolute public
 permalink; otherwise it remains relative.
+
+An item with structured data also contains one standard `attachments` entry:
+
+```json
+{
+  "attachments": [
+    {
+      "url": "https://feed.example.com/entries/sha256-v1:.../data.json",
+      "mime_type": "application/json"
+    }
+  ]
+}
+```
+
+The attachment URL uses the same `BASE_URL` convention as entry permalinks.
+Without it, the URL is relative: `/entries/{id}/data.json`. Items without data
+omit `attachments`. The feed includes only the link, never the JSON document
+itself. Attachment metadata counts toward the 16 MiB feed limit.
 
 Example:
 
@@ -186,6 +252,29 @@ returns `404`. A database or rendering failure returns `500` and is logged
 without exposing internal details.
 
 ### `HEAD /entries/{id}`
+
+`HEAD` returns the same status and headers as `GET` without a response body.
+
+## Read an entry's JSON attachment
+
+### `GET /entries/{id}/data.json`
+
+Returns the retained entry's stored JSON value directly, without a wrapper
+or double encoding. This endpoint is public. A successful response uses:
+
+```http
+Content-Type: application/json; charset=utf-8
+Content-Length: <response bytes>
+X-Content-Type-Options: nosniff
+```
+
+The endpoint does not render HTML, send `Content-Disposition`, or provide ETag
+or conditional requests. The response can be any permitted JSON value, not
+necessarily an object. It returns `404` for an unknown entry, an entry without
+data, or data removed by retention. A database failure returns `500` and is
+logged without exposing internal details.
+
+### `HEAD /entries/{id}/data.json`
 
 `HEAD` returns the same status and headers as `GET` without a response body.
 

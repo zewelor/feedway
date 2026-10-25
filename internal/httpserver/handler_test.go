@@ -168,6 +168,7 @@ func TestHandler(t *testing.T) {
 					return true, nil
 				},
 				testEntry,
+				testEntryData,
 				testFeed,
 				logger,
 			).ServeHTTP(response, request)
@@ -353,6 +354,7 @@ func TestReadiness(t *testing.T) {
 					return true, nil
 				},
 				testEntry,
+				testEntryData,
 				testFeed,
 				logger,
 			).ServeHTTP(response, request)
@@ -408,6 +410,42 @@ func TestPublishEntry(t *testing.T) {
 			expectedError:  "content_html is required",
 		},
 		{
+			name:           "json only is rejected",
+			body:           `{"data_json":{}}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedError:  "content_html is required",
+		},
+		{
+			name:           "null data is absent",
+			body:           `{"content_html":"content","data_json":null}`,
+			expectedStatus: http.StatusOK,
+			expectedResult: "deduplicated",
+		},
+		{
+			name:           "old field name is rejected",
+			body:           `{"content_html":"content","json_data":{}}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "request body is invalid",
+		},
+		{
+			name:           "malformed data",
+			body:           `{"content_html":"content","data_json":{]}`,
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "request body is invalid",
+		},
+		{
+			name:           "duplicate data keys",
+			body:           `{"content_html":"content","data_json":{"a":1,"a":2}}`,
+			expectedStatus: http.StatusOK,
+			expectedResult: "deduplicated",
+		},
+		{
+			name:           "data size limit",
+			body:           `{"content_html":"content","data_json":"` + strings.Repeat("x", 256*1024) + `"}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedError:  "data_json must not exceed 256 KiB",
+		},
+		{
 			name:           "unknown field",
 			body:           `{"content_html":"content","id":"client-id"}`,
 			expectedStatus: http.StatusBadRequest,
@@ -451,6 +489,7 @@ func TestPublishEntry(t *testing.T) {
 				&readiness{database: pinger{}},
 				publish,
 				testEntry,
+				testEntryData,
 				testFeed,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
@@ -608,6 +647,7 @@ func TestEntryPage(t *testing.T) {
 					return true, nil
 				},
 				load,
+				testEntryData,
 				testFeed,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
@@ -730,6 +770,7 @@ func TestFeed(t *testing.T) {
 					return true, nil
 				},
 				testEntry,
+				testEntryData,
 				test.load,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
@@ -787,6 +828,36 @@ func testFeed(context.Context) ([]byte, error) {
 	return []byte(`{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`), nil
 }
 
+func TestPublishDataJSON(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/entries", strings.NewReader(
+		`{"content_html":"<p>report</p>","data_json":{"count":9007199254740993,"sections":[]}}`,
+	))
+	request.Header.Set("Authorization", "Bearer "+testAPIToken)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	called := false
+	newHandler(
+		testAPIToken,
+		&readiness{database: pinger{}},
+		func(_ context.Context, values entry.Values) (bool, error) {
+			called = true
+			if got := values.DataJSON.String(); got != `{"count":9007199254740993,"sections":[]}` {
+				t.Errorf("data_json = %q", got)
+			}
+			return true, nil
+		},
+		testEntry,
+		testEntryData,
+		testFeed,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	).ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !called {
+		t.Fatalf("publish status = %d, called = %v, body = %s", response.Code, called, response.Body)
+	}
+}
+
 func testEntry(context.Context, string) (entry.Published, bool, error) {
 	return entry.Published{}, false, nil
 }
@@ -811,4 +882,72 @@ func (p pinger) Ping(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return p.err
+}
+
+func testEntryData(context.Context, string) ([]byte, bool, error) {
+	return nil, false, nil
+}
+
+func TestEntryData(t *testing.T) {
+	t.Parallel()
+
+	const data = `{"text":"<script>not HTML</script>","number":9007199254740993}`
+	tests := []struct {
+		name      string
+		method    string
+		found     bool
+		loadError error
+		status    int
+		body      string
+	}{
+		{name: "public get", method: http.MethodGet, found: true, status: http.StatusOK, body: data},
+		{name: "public head", method: http.MethodHead, found: true, status: http.StatusOK},
+		{name: "missing data", method: http.MethodGet, status: http.StatusNotFound, body: "404 page not found\n"},
+		{name: "missing head", method: http.MethodHead, status: http.StatusNotFound, body: "404 page not found\n"},
+		{name: "database failure", method: http.MethodGet, loadError: errors.New("private database error"),
+			status: http.StatusInternalServerError, body: "internal server error\n"},
+		{name: "unsupported method", method: http.MethodPost, status: http.StatusMethodNotAllowed,
+			body: "Method Not Allowed\n"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			var logs bytes.Buffer
+			load := func(_ context.Context, id string) ([]byte, bool, error) {
+				if id != "test-id" {
+					t.Errorf("id = %q", id)
+				}
+				return []byte(data), test.found, test.loadError
+			}
+			response := httptest.NewRecorder()
+			newHandler(
+				testAPIToken,
+				&readiness{database: pinger{}},
+				func(context.Context, entry.Values) (bool, error) { return true, nil },
+				testEntry,
+				load,
+				testFeed,
+				slog.New(slog.NewJSONHandler(&logs, nil)),
+			).ServeHTTP(response, httptest.NewRequest(test.method, "/entries/test-id/data.json", nil))
+			if response.Code != test.status || response.Body.String() != test.body {
+				t.Fatalf("response = %d %q, want %d %q", response.Code, response.Body, test.status, test.body)
+			}
+			if test.status == http.StatusOK {
+				if response.Header().Get("Content-Type") != "application/json; charset=utf-8" ||
+					response.Header().Get("X-Content-Type-Options") != "nosniff" ||
+					response.Header().Get("Content-Length") != strconv.Itoa(len(data)) {
+					t.Errorf("headers = %v", response.Header())
+				}
+			}
+			if test.loadError != nil && !strings.Contains(logs.String(), test.loadError.Error()) {
+				t.Error("database error was not logged")
+			}
+			if strings.Contains(logs.String(), data) {
+				t.Error("logs contain JSON data")
+			}
+			if test.status == http.StatusMethodNotAllowed && response.Header().Get("Allow") != "GET, HEAD" {
+				t.Errorf("Allow = %q", response.Header().Get("Allow"))
+			}
+		})
+	}
 }

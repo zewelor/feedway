@@ -17,11 +17,17 @@ type feed struct {
 }
 
 type item struct {
-	ID            string  `json:"id"`
-	URL           string  `json:"url"`
-	Title         *string `json:"title,omitempty"`
-	ContentHTML   string  `json:"content_html"`
-	DatePublished string  `json:"date_published"`
+	ID            string       `json:"id"`
+	URL           string       `json:"url"`
+	Title         *string      `json:"title,omitempty"`
+	ContentHTML   string       `json:"content_html"`
+	DatePublished string       `json:"date_published"`
+	Attachments   []attachment `json:"attachments,omitempty"`
+}
+
+type attachment struct {
+	URL      string `json:"url"`
+	MIMEType string `json:"mime_type"`
 }
 
 func Marshal(entries []entry.Published, baseURL string, maxBytes int) ([]byte, error) {
@@ -42,6 +48,12 @@ func Marshal(entries []entry.Published, baseURL string, maxBytes int) ([]byte, e
 			Title:         published.Title,
 			ContentHTML:   published.ContentHTML.String(),
 			DatePublished: published.CreatedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if published.HasDataJSON {
+			candidate.Attachments = []attachment{{
+				URL:      candidate.URL + "/data.json",
+				MIMEType: "application/json",
+			}}
 		}
 		encoded, err := json.Marshal(candidate)
 		if err != nil {

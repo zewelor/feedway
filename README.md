@@ -61,6 +61,7 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - exposes one authenticated endpoint for publishing entries;
 - serves one public feed at `/feed.json`;
 - serves a minimal public HTML page for each retained entry;
+- accepts optional `data_json` alongside HTML and exposes it as a public JSON attachment;
 - supports absolute entry permalinks through an optional `BASE_URL`;
 - deduplicates retries using a deterministic content hash;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
@@ -135,6 +136,13 @@ curl --fail-with-body \
 The first request returns `201 Created`. Publishing the same final content
 again returns `200 OK` with `"result":"deduplicated"` and the same ID, making
 retries safe without client-generated identifiers.
+
+Add an optional native JSON value in `data_json` to publish structured data
+alongside the readable HTML. Feedway stores both together and advertises a
+public `/entries/{id}/data.json` attachment in the feed. Data expires with its
+entry; Feedway does not interpret its application-specific fields.
+Deduplication uses the title and sanitized HTML only; a retry with different
+JSON keeps the attachment from the first successful publication.
 
 The complete request, response, error, feed, cache, and probe contract lives in
 the [HTTP API reference](docs/api.md).

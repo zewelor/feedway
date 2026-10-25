@@ -85,17 +85,22 @@ func Prepare(ctx context.Context, pool *pgxpool.Pool) error {
 func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (bool, error) {
 	insertCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
+	var dataJSON *string
+	if data := values.DataJSON.String(); data != "" {
+		dataJSON = &data
+	}
 
 	tag, err := pool.Exec(
 		insertCtx,
 		`
-			INSERT INTO entries (id, title, content_html)
-			VALUES ($1, $2, $3)
+			INSERT INTO entries (id, title, content_html, data_json)
+			VALUES ($1, $2, $3, $4)
 			ON CONFLICT (id) DO NOTHING
 		`,
 		values.ID,
 		values.Title,
 		values.ContentHTML.String(),
+		dataJSON,
 	)
 	if err != nil {
 		return false, fmt.Errorf("insert entry: %w", err)
@@ -115,7 +120,7 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 	err := pool.QueryRow(
 		getCtx,
 		`
-			SELECT id, title, content_html, created_at
+			SELECT id, title, content_html, created_at, data_json IS NOT NULL
 			FROM entries
 			WHERE id = $1
 		`,
@@ -125,6 +130,7 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 		&published.Title,
 		&contentHTML,
 		&published.CreatedAt,
+		&published.HasDataJSON,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entry.Published{}, false, nil
@@ -147,7 +153,7 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, er
 	rows, err := pool.Query(
 		listCtx,
 		`
-			SELECT id, title, content_html, created_at
+			SELECT id, title, content_html, created_at, data_json IS NOT NULL
 			FROM entries
 			ORDER BY created_at DESC, id DESC
 			LIMIT 100
@@ -169,6 +175,7 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, er
 			&published.Title,
 			&contentHTML,
 			&published.CreatedAt,
+			&published.HasDataJSON,
 		); err != nil {
 			return nil, fmt.Errorf("scan entry: %w", err)
 		}
@@ -183,6 +190,25 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, er
 	}
 
 	return entries, nil
+}
+
+func GetEntryData(ctx context.Context, pool *pgxpool.Pool, id string) ([]byte, bool, error) {
+	getCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	var data []byte
+	err := pool.QueryRow(
+		getCtx,
+		"SELECT data_json::text FROM entries WHERE id = $1 AND data_json IS NOT NULL",
+		id,
+	).Scan(&data)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("get entry data: %w", err)
+	}
+	return data, true, nil
 }
 
 func DeleteExpiredEntries(ctx context.Context, pool *pgxpool.Pool, retentionDays int) error {

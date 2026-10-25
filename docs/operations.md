@@ -47,6 +47,11 @@ RETENTION_DAYS=90
 
 The setting must be a positive integer.
 
+JSON attachments are stored in the same database row as their entry and expire
+with it. After cleanup, both `/entries/{id}` and `/entries/{id}/data.json`
+return `404`. A feed reader may retain a copy of the HTML and an attachment URL;
+the URL is not a backup of the JSON document.
+
 ## Troubleshooting
 
 | Symptom | Check |
