@@ -4,6 +4,12 @@ Feedway is a stateless HTTP container with PostgreSQL as its only persistent
 service. The repository provides a hardened Docker Compose example for a small
 single-host installation.
 
+The production image uses `scratch` and contains the statically linked Feedway
+binary, its license, and CA certificates copied from the pinned Go build image.
+It runs as UID/GID `65532:65532` with a read-only root filesystem in Compose.
+The image has no shell or package manager; run diagnostics from the host or a
+separate container. Rebuild the image to refresh its binary and CA certificates.
+
 ## Quick start with Compose
 
 You need Docker with Docker Compose, `curl`, and `openssl`. Create a deployment

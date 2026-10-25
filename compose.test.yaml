@@ -1,6 +1,6 @@
 services:
   markdownlint:
-    image: davidanson/markdownlint-cli2:v0.23.1@sha256:f382ea4fdc949883e79de678009437fb40c339323654c7b0dd4d5221cda8ed20
+    image: davidanson/markdownlint-cli2:v0.24.0@sha256:70ead7c0352d22d04bbe612cd96b54ec591538d8f4626cafe391bb2ecf3639ca
     working_dir: /workdir
     volumes:
       - .:/workdir
@@ -14,7 +14,7 @@ services:
       - no-new-privileges:true
 
   postgres:
-    image: postgres:18.4-trixie@sha256:c2d42a104eb6b37b286a2d9c5cf83f349de4d6516d513d00a2bd9610e2c2e5e4
+    image: postgres:18.6-trixie@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
     environment:
       POSTGRES_DB: feedway_test
       POSTGRES_PASSWORD: feedway_test

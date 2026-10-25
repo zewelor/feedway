@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.6-trixie@sha256:b75d466dd608587fd66cca705a307ba65b889827d06ad61d6a75f0482b51b7c7 AS dependencies
+FROM --platform=$BUILDPLATFORM golang:1.26.10-trixie@sha256:909771fef53e3dcb0950255f0c9a8b4728c3b841e61509c7b29b098de7ee02d4 AS dependencies
 
 WORKDIR /src
 
@@ -41,13 +41,14 @@ ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags="-s -w" -o /feedway ./cmd/feedway
 
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0f613bdf46feea7fc40f7bd72953e6 AS runtime
+FROM scratch AS runtime
 
-COPY --from=build --chown=nonroot:nonroot /feedway /feedway
-COPY --chown=nonroot:nonroot LICENSE /LICENSE
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /feedway /feedway
+COPY LICENSE /LICENSE
 
 EXPOSE 80
 
-USER nonroot:nonroot
+USER 65532:65532
 
 ENTRYPOINT ["/feedway"]

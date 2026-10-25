@@ -68,7 +68,7 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - deletes database entries after 30 days by default;
 - supports ETag, conditional requests, `GET`, and `HEAD`;
 - runs with PostgreSQL 18 in Docker Compose;
-- ships as a static, distroless, non-root container.
+- ships as a static, non-root container built from `scratch`.
 
 There are deliberately no users, dashboards, feed-management APIs, plugins, or
 configuration for values that can be conventions.
