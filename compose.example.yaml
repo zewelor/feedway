@@ -7,6 +7,7 @@ services:
     environment:
       API_TOKEN: ${API_TOKEN:?API_TOKEN is required}
       BASE_URL: ${BASE_URL:-}
+      FEED_RESPONSE_MAX_ENTRIES: "${FEED_RESPONSE_MAX_ENTRIES:-}"
       DB_HOST: postgres
       DB_NAME: feedway
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}

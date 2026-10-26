@@ -20,8 +20,8 @@ import (
 
 const (
 	readinessTimeout = 2 * time.Second
-	// maxFeedBytes caps the uncompressed JSON Feed at 16 MiB.
-	maxFeedBytes = 16 * 1024 * 1024
+	// maxFeedBytes caps the JSON Feed and budgets raw HTML read from the database.
+	maxFeedBytes = 4 * 1024 * 1024
 )
 
 type errorResponse struct {

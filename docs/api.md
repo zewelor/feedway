@@ -149,9 +149,10 @@ Successful and error responses from the publishing endpoint use
 ### `GET /feed.json`
 
 The response is [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) with the
-hardcoded feed title `Feedway`. It contains up to the latest 100 complete
-entries, newest first. The top-level object contains `version`, `title`, and
-`items`; each item contains `id`, `url`, `content_html`, `date_published`, and
+hardcoded feed title `Feedway`. It contains the latest complete entries, newest
+first, up to `FEED_RESPONSE_MAX_ENTRIES` (100 by default) and subject to the byte limit.
+The top-level object contains `version`, `title`, `_feedway`, and `items`; each
+item contains `id`, `url`, `content_html`, `date_published`, and
 an optional `title`. When `BASE_URL` is set, `url` is an absolute public
 permalink; otherwise it remains relative.
 
@@ -171,7 +172,7 @@ An item with structured data also contains one standard `attachments` entry:
 The attachment URL uses the same `BASE_URL` convention as entry permalinks.
 Without it, the URL is relative: `/entries/{id}/data.json`. Items without data
 omit `attachments`. The feed includes only the link, never the JSON document
-itself. Attachment metadata counts toward the 16 MiB feed limit.
+itself. Attachment metadata counts toward the 4 MiB feed limit.
 
 Example:
 
@@ -187,13 +188,16 @@ Example:
       "content_html": "<p>Three systems reported healthy.</p>",
       "date_published": "2026-07-18T08:00:00Z"
     }
-  ]
+  ],
+  "_feedway": {
+    "truncated": false
+  }
 }
 ```
 
-The uncompressed representation is limited to 16 MiB. If the newest 100 entries
-do not fit, Feedway serves the newest complete entries that do fit; it never
-serves a partial item. The response uses:
+The uncompressed representation is limited to 4 MiB. If the configured number
+of newest entries does not fit, Feedway serves the newest complete entries that
+do fit; it never serves a partial item. The response uses:
 
 ```http
 Content-Type: application/feed+json; charset=utf-8
@@ -210,6 +214,40 @@ If the feed cannot be loaded, the endpoint returns `500`. Feedway builds the
 feed newest-first and stops before the first complete item that would exceed
 the maximum size; that item and all older items are omitted. It never returns a
 partial item or a feed-size error during normal feed generation.
+
+### Feed completeness
+
+Every successful feed representation includes the top-level JSON Feed extension
+`_feedway` with a boolean `truncated` field:
+
+```json
+{"_feedway":{"truncated":true}}
+```
+
+`truncated` is `true` when the response omits older entries still present in
+PostgreSQL because of `FEED_RESPONSE_MAX_ENTRIES` or the 4 MiB response limit. It is
+`false` when all currently stored entries fit, including an empty database and
+exactly the configured entry count when those entries fit within the byte limit.
+Returning the configured maximum count alone does not establish whether the
+feed is truncated. Entries are never split or skipped
+to make room for older ones: the feed stops at the first item that does not fit.
+The extension itself counts toward the byte limit.
+
+Truncation is a normal `200` response and never blocks publishing. It does not
+change retention, expose a next page, or promise that the feed covers a given
+time window. Entries already deleted by retention cannot make `truncated` true.
+Feedway does not emit a warning item or an error status for omitted history.
+
+The signal is part of the response body and ETag: adding or removing an older,
+omitted entry can change the ETag even when the visible `items` are unchanged.
+`HEAD` and conditional requests keep the same behavior as other feed requests.
+An older Feedway version without `_feedway` does not provide this signal;
+absence must not be interpreted as `truncated: false`.
+
+Readers that do not recognize the extension ignore it according to the
+[JSON Feed extension rules](https://www.jsonfeed.org/version/1.1/#extensions).
+The extension does not add a reader UI warning; consumer behavior is outside
+this API contract.
 
 ### `HEAD /feed.json`
 

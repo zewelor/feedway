@@ -65,7 +65,8 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - supports absolute entry permalinks through an optional `BASE_URL`;
 - deduplicates retries using a deterministic content hash;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
-- keeps up to the latest 100 entries that fit within the 16 MiB feed limit;
+- keeps up to the latest 100 entries by default, configurable with `FEED_RESPONSE_MAX_ENTRIES`, within the 4 MiB feed limit;
+- signals when those feed limits omit older entries still stored in the database;
 - deletes database entries after 30 days by default;
 - supports ETag, conditional requests, `GET`, and `HEAD`;
 - runs with PostgreSQL 18 in Docker Compose;

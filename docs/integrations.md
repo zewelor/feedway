@@ -66,6 +66,11 @@ entries have no attachment. Consumers must handle missing or expired data
 explicitly; the attachment expires with the Feedway entry even if a reader
 retains its HTML.
 
+The feed also provides `_feedway.truncated` to signal that response limits omit
+older entries still in storage. This metadata does not change how entries or
+attachments are read. Feedway does not display a warning in Miniflux or modify
+other consumers; see [feed completeness](api.md#feed-completeness).
+
 The production Miniflux smoke test is intentionally left until the first real
 deployment, where network routing and TLS can be verified together.
 

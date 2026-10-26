@@ -23,9 +23,10 @@ const (
 )
 
 type Config struct {
-	Port     uint16
-	APIToken string
-	BaseURL  string
+	Port                   uint16
+	APIToken               string
+	BaseURL                string
+	FeedResponseMaxEntries int
 }
 
 func Run(ctx context.Context, config Config, pool *pgxpool.Pool, logger *slog.Logger) error {
@@ -63,11 +64,12 @@ func databaseHandler(config Config, pool *pgxpool.Pool, readiness *readiness, lo
 			return database.GetEntryData(ctx, pool, id)
 		},
 		func(ctx context.Context) ([]byte, error) {
-			entries, err := database.ListEntries(ctx, pool)
+			// One extra row distinguishes a full feed from an actually truncated one.
+			entries, err := database.ListEntries(ctx, pool, config.FeedResponseMaxEntries+1, maxFeedBytes)
 			if err != nil {
 				return nil, err
 			}
-			return jsonfeed.Marshal(entries, config.BaseURL, maxFeedBytes)
+			return jsonfeed.Marshal(entries, config.BaseURL, config.FeedResponseMaxEntries, maxFeedBytes)
 		},
 		logger,
 	)

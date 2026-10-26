@@ -11,9 +11,14 @@ import (
 const version = "https://jsonfeed.org/version/1.1"
 
 type feed struct {
-	Version string `json:"version"`
-	Title   string `json:"title"`
-	Items   []item `json:"items"`
+	Version  string   `json:"version"`
+	Title    string   `json:"title"`
+	Items    []item   `json:"items"`
+	Metadata metadata `json:"_feedway"`
+}
+
+type metadata struct {
+	Truncated bool `json:"truncated"`
 }
 
 type item struct {
@@ -30,18 +35,30 @@ type attachment struct {
 	MIMEType string `json:"mime_type"`
 }
 
-func Marshal(entries []entry.Published, baseURL string, maxBytes int) ([]byte, error) {
-	items := make([]item, 0, len(entries))
-	body, err := marshal(items)
+func Marshal(entries []entry.Published, baseURL string, maxItems, maxBytes int) ([]byte, error) {
+	if maxItems < 1 {
+		return nil, errors.New("maximum feed entries must be positive")
+	}
+	items := make([]item, 0, min(len(entries), maxItems))
+	empty, err := marshal(items, false)
 	if err != nil {
 		return nil, err
 	}
-	if len(body) > maxBytes {
+	if len(empty) > maxBytes {
 		return nil, errors.New("maximum feed size is smaller than an empty feed")
 	}
+	truncatedEmpty, err := marshal(items, true)
+	if err != nil {
+		return nil, err
+	}
 
-	currentBytes := len(body)
-	for _, published := range entries {
+	itemBytes := 0
+	truncated := false
+	for index, published := range entries {
+		if index == maxItems {
+			truncated = true
+			break
+		}
 		candidate := item{
 			ID:            published.ID,
 			URL:           baseURL + "/entries/" + published.ID,
@@ -64,21 +81,28 @@ func Marshal(entries []entry.Published, baseURL string, maxBytes int) ([]byte, e
 		if len(items) > 0 {
 			separatorBytes = 1
 		}
-		if currentBytes+separatorBytes+len(encoded) > maxBytes {
+		candidateBytes := itemBytes + separatorBytes + len(encoded)
+		envelopeBytes := len(empty)
+		if index+1 < len(entries) {
+			envelopeBytes = len(truncatedEmpty)
+		}
+		if envelopeBytes+candidateBytes > maxBytes {
+			truncated = true
 			break
 		}
 
 		items = append(items, candidate)
-		currentBytes += separatorBytes + len(encoded)
+		itemBytes = candidateBytes
 	}
 
-	return marshal(items)
+	return marshal(items, truncated)
 }
 
-func marshal(items []item) ([]byte, error) {
+func marshal(items []item, truncated bool) ([]byte, error) {
 	return json.Marshal(feed{
-		Version: version,
-		Title:   "Feedway",
-		Items:   items,
+		Version:  version,
+		Title:    "Feedway",
+		Items:    items,
+		Metadata: metadata{Truncated: truncated},
 	})
 }

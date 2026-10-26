@@ -3,6 +3,7 @@
 package database
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -240,7 +241,7 @@ func TestGetEntryRejectsUnsanitizedHTML(t *testing.T) {
 	}
 }
 
-func TestListEntriesReturnsNewestHundred(t *testing.T) {
+func TestListEntriesUsesRequestedLimit(t *testing.T) {
 	pool, err := Open(t.Context(), testConfig)
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
@@ -272,7 +273,7 @@ func TestListEntriesReturnsNewestHundred(t *testing.T) {
 		t.Fatalf("insert entries: %v", err)
 	}
 
-	entries, err := ListEntries(t.Context(), pool)
+	entries, err := ListEntries(t.Context(), pool, 100, 4*1024*1024)
 	if err != nil {
 		t.Fatalf("ListEntries() error = %v", err)
 	}
@@ -291,6 +292,66 @@ func TestListEntriesReturnsNewestHundred(t *testing.T) {
 	const wantLastID = "sha256-v1:0000000000000000000000000000000000000000000000000000000000000002"
 	if entries[99].ID != wantLastID {
 		t.Errorf("last ID = %q, want %q", entries[99].ID, wantLastID)
+	}
+	withExtra, err := ListEntries(t.Context(), pool, 101, 4*1024*1024)
+	if err != nil {
+		t.Fatalf("ListEntries() lookahead error = %v", err)
+	}
+	if len(withExtra) != 101 || withExtra[100].ContentHTML.String() != "<p>1</p>" {
+		t.Fatalf("lookahead did not return the older entry: count = %d", len(withExtra))
+	}
+}
+
+func TestListEntriesBoundsHTMLRead(t *testing.T) {
+	pool, err := Open(t.Context(), testConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	if err := Prepare(t.Context(), pool); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(t.Context(), "TRUNCATE entries"); err != nil {
+		t.Fatal(err)
+	}
+	// Each entry contains exactly 32 bytes of HTML; equal timestamps exercise ID ordering.
+	if _, err := pool.Exec(t.Context(), `
+		INSERT INTO entries (id, content_html, created_at)
+		SELECT 'sha256-v1:' || lpad(to_hex(number), 64, '0'),
+		       '<p>' || repeat('x', 25) || '</p>', '2026-01-01T00:00:00Z'::timestamptz
+		FROM generate_series(1, 6) AS number
+	`); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name      string
+		limit     int
+		budget    int
+		wantCount int
+	}{
+		{name: "all fit", limit: 7, budget: 192, wantCount: 6},
+		{name: "newest entry exceeds budget", limit: 7, budget: 1, wantCount: 1},
+		{name: "first entry exceeding budget is retained", limit: 7, budget: 33, wantCount: 2},
+		{name: "exact budget keeps one more entry", limit: 7, budget: 64, wantCount: 3},
+		{name: "count limit applies first", limit: 2, budget: 64, wantCount: 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			entries, err := ListEntries(t.Context(), pool, test.limit, test.budget)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != test.wantCount {
+				t.Fatalf("entry count = %d, want %d", len(entries), test.wantCount)
+			}
+			for i, published := range entries {
+				if published.ID != fmt.Sprintf("sha256-v1:%064x", 6-i) {
+					t.Errorf("entry %d = %q, want newest-first prefix", i, published.ID)
+				}
+				if len(published.ContentHTML.String()) != 32 {
+					t.Errorf("entry %d HTML was changed or split", i)
+				}
+			}
+		})
 	}
 }
 

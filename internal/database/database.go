@@ -146,18 +146,35 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 	return published, true, nil
 }
 
-func ListEntries(ctx context.Context, pool *pgxpool.Pool) ([]entry.Published, error) {
+// ListEntries keeps the first entry beyond the HTML budget so the feed can detect truncation.
+func ListEntries(ctx context.Context, pool *pgxpool.Pool, limit, maxHTMLBytes int) ([]entry.Published, error) {
 	listCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
 	rows, err := pool.Query(
 		listCtx,
 		`
-			SELECT id, title, content_html, created_at, data_json IS NOT NULL
-			FROM entries
+			WITH recent AS (
+				SELECT id, title, content_html, created_at,
+				       data_json IS NOT NULL AS has_data_json
+				FROM entries
+				ORDER BY created_at DESC, id DESC
+				LIMIT $1
+			), sized AS (
+				SELECT recent.*,
+				       COALESCE(sum(octet_length(content_html)) OVER (
+					       ORDER BY created_at DESC, id DESC
+					       ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+				       ), 0) AS previous_html_bytes
+				FROM recent
+			)
+			SELECT id, title, content_html, created_at, has_data_json
+			FROM sized
+			WHERE previous_html_bytes <= $2
 			ORDER BY created_at DESC, id DESC
-			LIMIT 100
 		`,
+		limit,
+		maxHTMLBytes,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)

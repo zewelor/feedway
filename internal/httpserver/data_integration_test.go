@@ -23,22 +23,7 @@ var dataTestConfig = database.Config{
 }
 
 func TestEntryDataLifecycle(t *testing.T) {
-	// A separate database prevents interference with the database package's tests.
-	adminConfig := dataTestConfig
-	adminConfig.Name = "feedway_test"
-	admin, err := database.Open(t.Context(), adminConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(admin.Close)
-	if _, err := admin.Exec(t.Context(), "CREATE DATABASE feedway_http_test"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.Exec(context.Background(), "DROP DATABASE feedway_http_test"); err != nil {
-			t.Errorf("drop test database: %v", err)
-		}
-	})
+	createHTTPTestDatabase(t)
 	pool, err := database.Open(t.Context(), dataTestConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -68,7 +53,7 @@ func TestEntryDataLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		server := httptest.NewServer(databaseHandler(
-			Config{APIToken: testAPIToken, BaseURL: "https://feed.example.com"},
+			Config{APIToken: testAPIToken, BaseURL: "https://feed.example.com", FeedResponseMaxEntries: 100},
 			pool,
 			&readiness{database: pool},
 			slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -223,4 +208,24 @@ func TestEntryDataLifecycle(t *testing.T) {
 	request(http.MethodGet, "/entries/"+created.ID, "", http.StatusNotFound)
 	request(http.MethodHead, path, "", http.StatusNotFound)
 	request(http.MethodGet, "/entries/"+changed.ID+"/data.json", "", http.StatusOK)
+}
+
+func createHTTPTestDatabase(t *testing.T) {
+	t.Helper()
+	// A separate database prevents interference with the database package's tests.
+	adminConfig := dataTestConfig
+	adminConfig.Name = "feedway_test"
+	admin, err := database.Open(t.Context(), adminConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	if _, err := admin.Exec(t.Context(), "CREATE DATABASE feedway_http_test"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, err := admin.Exec(context.Background(), "DROP DATABASE feedway_http_test"); err != nil {
+			t.Errorf("drop test database: %v", err)
+		}
+	})
 }

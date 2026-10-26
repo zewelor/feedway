@@ -2,6 +2,7 @@ package jsonfeed_test
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,14 +14,64 @@ import (
 func TestMarshalEmptyFeed(t *testing.T) {
 	t.Parallel()
 
-	got, err := jsonfeed.Marshal(nil, "", 1024)
+	got, err := jsonfeed.Marshal(nil, "", 200, 1024)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 
-	const want = `{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`
+	const want = `{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[],"_feedway":{"truncated":false}}`
 	if string(got) != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
+	}
+}
+
+func TestMarshalReportsTruncation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		count         int
+		wantCount     int
+		wantTruncated bool
+		limit         int
+	}{
+		{name: "empty", limit: 100},
+		{name: "below limit", count: 99, wantCount: 99, limit: 100},
+		{name: "exact limit", count: 100, wantCount: 100, limit: 100},
+		{name: "older entries omitted", count: 101, wantCount: 100, wantTruncated: true, limit: 100},
+		{name: "custom count", count: 4, wantCount: 3, wantTruncated: true, limit: 3},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			entries := make([]entry.Published, test.count)
+			for i := range entries {
+				entries[i] = entry.Published{
+					ID:          "entry-" + strconv.Itoa(i),
+					ContentHTML: mustParseHTML(t, "<p>report</p>"),
+				}
+			}
+			body, err := jsonfeed.Marshal(entries, "", test.limit, 1024*1024)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var feed struct {
+				Items    []json.RawMessage `json:"items"`
+				Metadata *struct {
+					Truncated bool `json:"truncated"`
+				} `json:"_feedway"`
+			}
+			if err := json.Unmarshal(body, &feed); err != nil {
+				t.Fatal(err)
+			}
+			if feed.Metadata == nil {
+				t.Fatal("feed has no truncation signal")
+			}
+			if len(feed.Items) != test.wantCount || feed.Metadata.Truncated != test.wantTruncated {
+				t.Fatalf("items = %d, truncated = %v; want %d, %v",
+					len(feed.Items), feed.Metadata.Truncated, test.wantCount, test.wantTruncated)
+			}
+		})
 	}
 }
 
@@ -42,7 +93,7 @@ func TestMarshalEntries(t *testing.T) {
 			ContentHTML: secondHTML,
 			CreatedAt:   time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC),
 		},
-	}, "https://feed.example.com", 1024)
+	}, "https://feed.example.com", 200, 1024)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
@@ -54,7 +105,7 @@ func TestMarshalEntries(t *testing.T) {
 		`"date_published":"2026-07-16T11:30:45.123Z"},` +
 		`{"id":"sha256-v1:second","url":"https://feed.example.com/entries/sha256-v1:second",` +
 		`"content_html":"\u003cp\u003esecond\u003c/p\u003e",` +
-		`"date_published":"2026-07-16T10:00:00Z"}]}`
+		`"date_published":"2026-07-16T10:00:00Z"}],"_feedway":{"truncated":false}}`
 	if string(got) != want {
 		t.Errorf("Marshal() = %s, want %s", got, want)
 	}
@@ -69,7 +120,7 @@ func TestMarshalUsesRelativeEntryURLWithoutBaseURL(t *testing.T) {
 			ContentHTML: mustParseHTML(t, "<p>first</p>"),
 			CreatedAt:   time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
 		},
-	}, "", 1024)
+	}, "", 200, 1024)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
@@ -80,33 +131,45 @@ func TestMarshalUsesRelativeEntryURLWithoutBaseURL(t *testing.T) {
 	}
 }
 
-func TestMarshalKeepsNewestEntriesThatFit(t *testing.T) {
+func TestMarshalByteBoundaries(t *testing.T) {
 	t.Parallel()
-
 	entries := []entry.Published{
-		{
-			ID:          "sha256-v1:first",
-			ContentHTML: mustParseHTML(t, "<p>first</p>"),
-			CreatedAt:   time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
-		},
-		{
-			ID:          "sha256-v1:second",
-			ContentHTML: mustParseHTML(t, "<p>second</p>"),
-			CreatedAt:   time.Date(2026, 7, 16, 11, 0, 0, 0, time.UTC),
-		},
+		{ID: "first", ContentHTML: mustParseHTML(t, "<p>first</p>")},
+		{ID: "second", ContentHTML: mustParseHTML(t, "<p>second</p>")},
 	}
-
-	newest, err := jsonfeed.Marshal(entries[:1], "", 1024)
+	first, err := jsonfeed.Marshal(entries[:1], "", 200, 4096)
 	if err != nil {
-		t.Fatalf("Marshal() newest entry error = %v", err)
+		t.Fatal(err)
 	}
-	got, err := jsonfeed.Marshal(entries, "", len(newest))
+	complete, err := jsonfeed.Marshal(entries, "", 200, 4096)
 	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
+		t.Fatal(err)
 	}
-
-	if string(got) != string(newest) {
-		t.Errorf("Marshal() = %s, want newest fitting entry %s", got, newest)
+	exact, err := jsonfeed.Marshal(entries, "", 200, len(complete))
+	if err != nil || string(exact) != string(complete) {
+		t.Fatalf("complete feed at exact byte limit: error = %v, body = %s", err, exact)
+	}
+	for _, test := range []struct {
+		name      string
+		limit     int
+		wantCount int
+	}{
+		{name: "newest entries that fit", limit: len(first), wantCount: 1},
+		{name: "complete feed one byte too large", limit: len(complete) - 1, wantCount: 1},
+		{name: "truncated feed exact byte limit", limit: len(first) - 1, wantCount: 1},
+		{name: "newest item cannot fit", limit: len(first) - 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			body, err := jsonfeed.Marshal(entries, "", 200, test.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(body) > test.limit {
+				t.Fatalf("feed size = %d, limit = %d", len(body), test.limit)
+			}
+			assertTruncatedItems(t, body, entries[:test.wantCount])
+		})
 	}
 }
 
@@ -124,7 +187,7 @@ func mustParseHTML(t *testing.T, value string) entry.HTML {
 func TestMarshalRejectsLimitSmallerThanEmptyFeed(t *testing.T) {
 	t.Parallel()
 
-	if _, err := jsonfeed.Marshal(nil, "", 1); err == nil {
+	if _, err := jsonfeed.Marshal(nil, "", 200, 1); err == nil {
 		t.Fatal("Marshal() error = nil, want size limit error")
 	}
 }
@@ -138,7 +201,7 @@ func TestMarshalDataAttachments(t *testing.T) {
 				{ID: "with-data", ContentHTML: mustParseHTML(t, "<p>report</p>"), HasDataJSON: true},
 				{ID: "without-data", ContentHTML: mustParseHTML(t, "<p>legacy</p>")},
 			}
-			body, err := jsonfeed.Marshal(entries, baseURL, 4096)
+			body, err := jsonfeed.Marshal(entries, baseURL, 200, 4096)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -160,17 +223,59 @@ func TestMarshalDataAttachments(t *testing.T) {
 			if attachment.URL != baseURL+"/entries/with-data/data.json" || attachment.MIMEType != "application/json" {
 				t.Errorf("attachment = %+v", attachment)
 			}
-			newest, err := jsonfeed.Marshal(entries[:1], baseURL, len(body))
+			newest, err := jsonfeed.Marshal(entries[:1], baseURL, 200, len(body))
 			if err != nil {
 				t.Fatal(err)
 			}
-			limited, err := jsonfeed.Marshal(entries, baseURL, len(newest))
+			limited, err := jsonfeed.Marshal(entries, baseURL, 200, len(newest))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if string(limited) != string(newest) {
-				t.Errorf("size limit omitted or split an attachment: %s", limited)
+			assertTruncatedItems(t, limited, entries[:1])
+			var limitedFeed struct {
+				Items []struct {
+					Attachments []json.RawMessage `json:"attachments"`
+				} `json:"items"`
+			}
+			if err := json.Unmarshal(limited, &limitedFeed); err != nil {
+				t.Fatal(err)
+			}
+			if len(limitedFeed.Items[0].Attachments) != 1 {
+				t.Fatal("attachment metadata was lost when truncating")
 			}
 		})
+	}
+}
+
+func assertTruncatedItems(t *testing.T, body []byte, want []entry.Published) {
+	t.Helper()
+	var feed struct {
+		Items []struct {
+			ID          string `json:"id"`
+			ContentHTML string `json:"content_html"`
+		} `json:"items"`
+		Metadata struct {
+			Truncated bool `json:"truncated"`
+		} `json:"_feedway"`
+	}
+	if err := json.Unmarshal(body, &feed); err != nil {
+		t.Fatal(err)
+	}
+	if !feed.Metadata.Truncated || len(feed.Items) != len(want) {
+		t.Fatalf("truncated = %v, items = %d; want true, %d", feed.Metadata.Truncated, len(feed.Items), len(want))
+	}
+	for i, published := range want {
+		if feed.Items[i].ID != published.ID || feed.Items[i].ContentHTML != published.ContentHTML.String() {
+			t.Errorf("item %d was reordered or its content was changed: %+v", i, feed.Items[i])
+		}
+	}
+}
+
+func TestMarshalRejectsInvalidEntryLimit(t *testing.T) {
+	t.Parallel()
+	for _, limit := range []int{0, -1} {
+		if _, err := jsonfeed.Marshal(nil, "", limit, 1024); err == nil {
+			t.Errorf("Marshal() accepted entry limit %d", limit)
+		}
 	}
 }

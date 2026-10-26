@@ -24,40 +24,43 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":   strings.Repeat("a", 64),
 			},
 			expected: Config{
-				HTTPPort:      80,
-				DBHost:        "postgres",
-				DBPort:        5432,
-				DBName:        "feedway",
-				DBUser:        "feedway",
-				DBPassword:    "secret",
-				DBSSLMode:     "disable",
-				APIToken:      strings.Repeat("a", 64),
-				RetentionDays: 30,
+				HTTPPort:               80,
+				DBHost:                 "postgres",
+				DBPort:                 5432,
+				DBName:                 "feedway",
+				DBUser:                 "feedway",
+				DBPassword:             "secret",
+				DBSSLMode:              "disable",
+				APIToken:               strings.Repeat("a", 64),
+				RetentionDays:          30,
+				FeedResponseMaxEntries: 100,
 			},
 		},
 		{
-			name: "custom HTTP port, base URL, and retention",
+			name: "custom HTTP port, base URL, retention, and feed count",
 			environment: map[string]string{
-				"DB_HOST":        "postgres",
-				"DB_NAME":        "feedway",
-				"DB_USER":        "feedway",
-				"DB_PASSWORD":    "secret",
-				"API_TOKEN":      strings.Repeat("a", 64),
-				"BASE_URL":       "https://feed.example.com/",
-				"HTTP_PORT":      "8080",
-				"RETENTION_DAYS": "90",
+				"DB_HOST":                   "postgres",
+				"DB_NAME":                   "feedway",
+				"DB_USER":                   "feedway",
+				"DB_PASSWORD":               "secret",
+				"API_TOKEN":                 strings.Repeat("a", 64),
+				"BASE_URL":                  "https://feed.example.com/",
+				"HTTP_PORT":                 "8080",
+				"RETENTION_DAYS":            "90",
+				"FEED_RESPONSE_MAX_ENTRIES": "500",
 			},
 			expected: Config{
-				HTTPPort:      8080,
-				BaseURL:       "https://feed.example.com",
-				DBHost:        "postgres",
-				DBPort:        5432,
-				DBName:        "feedway",
-				DBUser:        "feedway",
-				DBPassword:    "secret",
-				DBSSLMode:     "disable",
-				APIToken:      strings.Repeat("a", 64),
-				RetentionDays: 90,
+				HTTPPort:               8080,
+				BaseURL:                "https://feed.example.com",
+				DBHost:                 "postgres",
+				DBPort:                 5432,
+				DBName:                 "feedway",
+				DBUser:                 "feedway",
+				DBPassword:             "secret",
+				DBSSLMode:              "disable",
+				APIToken:               strings.Repeat("a", 64),
+				RetentionDays:          90,
+				FeedResponseMaxEntries: 500,
 			},
 		},
 		{
@@ -100,15 +103,16 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":   strings.Repeat("a", 64),
 			},
 			expected: Config{
-				HTTPPort:      80,
-				DBHost:        "db.example",
-				DBPort:        5433,
-				DBName:        "feed/way",
-				DBUser:        "feed@way",
-				DBPassword:    "p@ss/word",
-				DBSSLMode:     "disable",
-				APIToken:      strings.Repeat("a", 64),
-				RetentionDays: 30,
+				HTTPPort:               80,
+				DBHost:                 "db.example",
+				DBPort:                 5433,
+				DBName:                 "feed/way",
+				DBUser:                 "feed@way",
+				DBPassword:             "p@ss/word",
+				DBSSLMode:              "disable",
+				APIToken:               strings.Repeat("a", 64),
+				RetentionDays:          30,
+				FeedResponseMaxEntries: 100,
 			},
 		},
 		{
@@ -122,15 +126,16 @@ func TestLoad(t *testing.T) {
 				"API_TOKEN":   strings.Repeat("a", 64),
 			},
 			expected: Config{
-				HTTPPort:      80,
-				DBHost:        "db.example",
-				DBPort:        5432,
-				DBName:        "feedway",
-				DBUser:        "feedway",
-				DBPassword:    "secret",
-				DBSSLMode:     "verify-full",
-				APIToken:      strings.Repeat("a", 64),
-				RetentionDays: 30,
+				HTTPPort:               80,
+				DBHost:                 "db.example",
+				DBPort:                 5432,
+				DBName:                 "feedway",
+				DBUser:                 "feedway",
+				DBPassword:             "secret",
+				DBSSLMode:              "verify-full",
+				APIToken:               strings.Repeat("a", 64),
+				RetentionDays:          30,
+				FeedResponseMaxEntries: 100,
 			},
 		},
 		{
@@ -295,6 +300,49 @@ func TestLoad(t *testing.T) {
 			}
 			if config != test.expected {
 				t.Fatalf("Load() = %#v, want %#v", config, test.expected)
+			}
+		})
+	}
+}
+
+func TestLoadFeedResponseMaxEntries(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		value     string
+		want      int
+		wantError bool
+	}{
+		{name: "empty uses default", want: 100},
+		{name: "minimum", value: "1", want: 1},
+		{name: "custom", value: "500", want: 500},
+		{name: "maximum", value: "1000", want: 1000},
+		{name: "zero", value: "0", wantError: true},
+		{name: "negative", value: "-1", wantError: true},
+		{name: "not an integer", value: "many", wantError: true},
+		{name: "above maximum", value: "1001", wantError: true},
+		{name: "overflow", value: "99999999999999999999999", wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			environment := map[string]string{
+				"DB_HOST": "postgres", "DB_NAME": "feedway", "DB_USER": "feedway",
+				"DB_PASSWORD": "secret", "API_TOKEN": strings.Repeat("a", 64),
+				"FEED_RESPONSE_MAX_ENTRIES": test.value,
+			}
+			configuration, err := Load(func(name string) (string, bool) {
+				value, exists := environment[name]
+				return value, exists
+			})
+			if test.wantError {
+				if err == nil || err.Error() != "FEED_RESPONSE_MAX_ENTRIES must be between 1 and 1000" {
+					t.Fatalf("Load() error = %v, want invalid FEED_RESPONSE_MAX_ENTRIES", err)
+				}
+				return
+			}
+			if err != nil || configuration.FeedResponseMaxEntries != test.want {
+				t.Fatalf("FeedResponseMaxEntries = %d, error = %v; want %d",
+					configuration.FeedResponseMaxEntries, err, test.want)
 			}
 		})
 	}

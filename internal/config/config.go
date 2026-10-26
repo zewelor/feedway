@@ -9,10 +9,13 @@ import (
 )
 
 const (
-	defaultDatabasePort    = 5432
-	defaultDatabaseSSLMode = "disable"
-	defaultHTTPPort        = 80
-	defaultRetentionDays   = 30
+	defaultDatabasePort           = 5432
+	defaultDatabaseSSLMode        = "disable"
+	defaultHTTPPort               = 80
+	defaultRetentionDays          = 30
+	defaultFeedResponseMaxEntries = 100
+	// maxFeedResponseMaxEntries rejects accidental oversized reads; it is an operator guardrail.
+	maxFeedResponseMaxEntries = 1000
 	// maxRetentionDays is an intentionally arbitrary 100-year guardrail, not a PostgreSQL limit.
 	// It rejects obviously accidental values while allowing effectively indefinite retention.
 	maxRetentionDays = 36500
@@ -20,16 +23,17 @@ const (
 )
 
 type Config struct {
-	HTTPPort      uint16
-	BaseURL       string
-	DBHost        string
-	DBPort        uint16
-	DBName        string
-	DBUser        string
-	DBPassword    string
-	DBSSLMode     string
-	APIToken      string
-	RetentionDays int
+	HTTPPort               uint16
+	BaseURL                string
+	DBHost                 string
+	DBPort                 uint16
+	DBName                 string
+	DBUser                 string
+	DBPassword             string
+	DBSSLMode              string
+	APIToken               string
+	RetentionDays          int
+	FeedResponseMaxEntries int
 }
 
 type LookupEnv func(string) (string, bool)
@@ -59,18 +63,23 @@ func Load(lookupEnv LookupEnv) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	feedMaxEntries, err := loadFeedResponseMaxEntries(lookupEnv)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
-		HTTPPort:      httpPort,
-		BaseURL:       baseURL,
-		DBHost:        database.host,
-		DBPort:        database.port,
-		DBName:        database.name,
-		DBUser:        database.user,
-		DBPassword:    database.password,
-		DBSSLMode:     database.sslMode,
-		APIToken:      apiToken,
-		RetentionDays: retentionDays,
+		HTTPPort:               httpPort,
+		BaseURL:                baseURL,
+		DBHost:                 database.host,
+		DBPort:                 database.port,
+		DBName:                 database.name,
+		DBUser:                 database.user,
+		DBPassword:             database.password,
+		DBSSLMode:              database.sslMode,
+		APIToken:               apiToken,
+		RetentionDays:          retentionDays,
+		FeedResponseMaxEntries: feedMaxEntries,
 	}, nil
 }
 
@@ -184,4 +193,17 @@ func loadRetentionDays(lookupEnv LookupEnv) (int, error) {
 	}
 
 	return days, nil
+}
+
+func loadFeedResponseMaxEntries(lookupEnv LookupEnv) (int, error) {
+	value, _ := lookupEnv("FEED_RESPONSE_MAX_ENTRIES")
+	if value == "" {
+		return defaultFeedResponseMaxEntries, nil
+	}
+
+	count, err := strconv.Atoi(value)
+	if err != nil || count < 1 || count > maxFeedResponseMaxEntries {
+		return 0, errors.New("FEED_RESPONSE_MAX_ENTRIES must be between 1 and 1000")
+	}
+	return count, nil
 }

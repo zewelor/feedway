@@ -47,6 +47,16 @@ RETENTION_DAYS=90
 
 The setting must be a positive integer.
 
+The feed's `_feedway.truncated` flag reports whether `FEED_RESPONSE_MAX_ENTRIES` or the 4 MiB
+response limit omitted entries still stored in PostgreSQL. It does not report
+entries already deleted by retention. A truncated feed remains a valid `200`
+response and does not prevent new publications. See
+[feed completeness](api.md#feed-completeness) for the contract.
+
+Increase `FEED_RESPONSE_MAX_ENTRIES` to return more entries when they fit within 4 MiB.
+This does not extend database retention. The default is 100; see the
+[configuration guide](deployment.md#environment-variables) for limits and setup.
+
 JSON attachments are stored in the same database row as their entry and expire
 with it. After cleanup, both `/entries/{id}` and `/entries/{id}/data.json`
 return `404`. A feed reader may retain a copy of the HTML and an attachment URL;

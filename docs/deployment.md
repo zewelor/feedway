@@ -81,6 +81,7 @@ Only values that differ between deployment environments are configurable:
 | `DB_USER` | yes | — | PostgreSQL user |
 | `HTTP_PORT` | no | `80` | HTTP listen port inside the container |
 | `RETENTION_DAYS` | no | `30` | Days to retain entries, from 1 to 36,500 |
+| `FEED_RESPONSE_MAX_ENTRIES` | no | `100` | Maximum feed entries per response, from 1 to 1,000 |
 
 `API_TOKEN` must be exactly 64 hexadecimal characters. Generate one with:
 
@@ -92,7 +93,31 @@ Set `BASE_URL` to Feedway's public origin, for example
 `https://feed.example.com`. A trailing slash is ignored. When it is unset,
 entry permalinks remain relative.
 
-The feed size, request size, item count, timeouts, and cleanup interval are
+Set `FEED_RESPONSE_MAX_ENTRIES` when the default feed count does not cover the intended
+reading workflow, for example:
+
+```text
+FEED_RESPONSE_MAX_ENTRIES=500
+```
+
+The Compose example passes this value from the shell or `.env`; an empty or
+unset value uses the application's default. After changing it, run
+`docker compose up -d feedway` to recreate the application container
+with the new environment. A plain container restart does not reload environment
+variables. Values outside 1–1,000 or non-integer values fail startup. The upper
+bound is an operator guardrail against accidentally requesting an excessive
+number of rows, not a PostgreSQL limit.
+
+The 4 MiB response limit still applies. The database query uses the same budget
+for raw HTML and keeps one extra entry to detect truncation. Each feed read
+therefore transfers at most 4 MiB + 256 KiB of HTML to the application. This does
+not cap total process memory: metadata, JSON encoding, and concurrent requests
+also use memory. Raising the count can increase database work and memory use
+and does not guarantee a complete feed; check
+`_feedway.truncated` in the response. Retention remains independent of this
+setting.
+
+The feed byte size, request size, timeouts, and cleanup interval are
 application conventions, not configuration. Feedway configures an 8 KiB HTTP
 header limit, 5-second header-read timeout, 15-second read and write timeouts,
 60-second idle timeout, and 15-second graceful-shutdown timeout.
