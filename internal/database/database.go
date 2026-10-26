@@ -75,14 +75,18 @@ func Prepare(ctx context.Context, pool *pgxpool.Pool) error {
 	prepareCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 
-	if _, err := pool.Exec(prepareCtx, schema); err != nil {
+	err := pgx.BeginFunc(prepareCtx, pool, func(tx pgx.Tx) error {
+		_, err := tx.Exec(prepareCtx, schema)
+		return err
+	})
+	if err != nil {
 		return fmt.Errorf("prepare database schema: %w", err)
 	}
 
 	return nil
 }
 
-func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (bool, error) {
+func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (string, bool, error) {
 	insertCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	var dataJSON *string
@@ -90,23 +94,36 @@ func InsertEntry(ctx context.Context, pool *pgxpool.Pool, values entry.Values) (
 		dataJSON = &data
 	}
 
-	tag, err := pool.Exec(
+	var feed *string
+	if values.Feed != nil {
+		name := values.Feed.String()
+		feed = &name
+	}
+	var (
+		id      string
+		created bool
+	)
+	err := pool.QueryRow(
 		insertCtx,
 		`
-			INSERT INTO entries (id, title, content_html, data_json)
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (id) DO NOTHING
+			INSERT INTO entries (content_hash, title, content_html, data_json, feed)
+			VALUES ($1, $2, $3, $4, $5)
+			-- Preserve stored values and resolve concurrent deletion or reassignment atomically.
+			ON CONFLICT (feed, content_hash)
+			DO UPDATE SET content_hash = entries.content_hash
+			RETURNING id, OLD.id IS NULL AS created
 		`,
-		values.ID,
+		values.ContentHash,
 		values.Title,
 		values.ContentHTML.String(),
 		dataJSON,
-	)
+		feed,
+	).Scan(&id, &created)
 	if err != nil {
-		return false, fmt.Errorf("insert entry: %w", err)
+		return "", false, fmt.Errorf("insert entry: %w", err)
 	}
 
-	return tag.RowsAffected() == 1, nil
+	return id, created, nil
 }
 
 func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Published, bool, error) {
@@ -147,9 +164,19 @@ func GetEntry(ctx context.Context, pool *pgxpool.Pool, id string) (entry.Publish
 }
 
 // ListEntries keeps the first entry beyond the HTML budget so the feed can detect truncation.
-func ListEntries(ctx context.Context, pool *pgxpool.Pool, limit, maxHTMLBytes int) ([]entry.Published, error) {
+func ListEntries(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	selected *entry.Feed,
+	limit, maxHTMLBytes int,
+) ([]entry.Published, error) {
 	listCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
+	var feed *string
+	if selected != nil {
+		name := selected.String()
+		feed = &name
+	}
 
 	rows, err := pool.Query(
 		listCtx,
@@ -158,6 +185,7 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool, limit, maxHTMLBytes in
 				SELECT id, title, content_html, created_at,
 				       data_json IS NOT NULL AS has_data_json
 				FROM entries
+				WHERE $3::text IS NULL OR feed = $3
 				ORDER BY created_at DESC, id DESC
 				LIMIT $1
 			), sized AS (
@@ -175,6 +203,7 @@ func ListEntries(ctx context.Context, pool *pgxpool.Pool, limit, maxHTMLBytes in
 		`,
 		limit,
 		maxHTMLBytes,
+		feed,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list entries: %w", err)

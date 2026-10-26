@@ -20,7 +20,8 @@ const (
 var htmlPolicy = bluemonday.UGCPolicy()
 
 type Values struct {
-	ID          string
+	ContentHash string
+	Feed        *Feed
 	Title       *string
 	ContentHTML HTML
 	DataJSON    JSON
@@ -66,7 +67,7 @@ func Normalize(title, contentHTML string, dataJSON json.RawMessage) (Values, err
 	}
 
 	return Values{
-		ID:          contentID(title, contentHTML),
+		ContentHash: contentHash(title, contentHTML),
 		Title:       normalizedTitle,
 		ContentHTML: HTML{value: contentHTML},
 		DataJSON:    data,
@@ -87,7 +88,7 @@ func ParseHTML(contentHTML string) (HTML, error) {
 	return HTML{value: contentHTML}, nil
 }
 
-func contentID(title, contentHTML string) string {
+func contentHash(title, contentHTML string) string {
 	input := []byte("feedway-entry-v1")
 	input = binary.BigEndian.AppendUint64(input, uint64(len(title)))
 	input = append(input, title...)

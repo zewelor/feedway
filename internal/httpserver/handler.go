@@ -29,6 +29,7 @@ type errorResponse struct {
 }
 
 type entryRequest struct {
+	Feed        *string         `json:"feed"`
 	Title       string          `json:"title"`
 	ContentHTML string          `json:"content_html"`
 	DataJSON    json.RawMessage `json:"data_json"`
@@ -64,10 +65,10 @@ type databasePinger interface {
 	Ping(context.Context) error
 }
 
-type publishEntry func(context.Context, entry.Values) (bool, error)
+type publishEntry func(context.Context, entry.Values) (string, bool, error)
 type loadEntry func(context.Context, string) (entry.Published, bool, error)
 type loadEntryData func(context.Context, string) ([]byte, bool, error)
-type loadFeed func(context.Context) ([]byte, error)
+type loadFeed func(context.Context, *entry.Feed) ([]byte, error)
 
 func newHandler(
 	apiToken string,
@@ -88,6 +89,7 @@ func newHandler(
 	mux.HandleFunc("GET /entries/{id}", entryPage(loadOne, logger))
 	mux.HandleFunc("GET /entries/{id}/data.json", entryData(loadData, logger))
 	mux.HandleFunc("GET /feed.json", feed(load, logger))
+	mux.HandleFunc("GET /feeds/{feed}/feed.json", feed(load, logger))
 
 	return logRequests(logger, mux)
 }
@@ -155,7 +157,16 @@ func entryPage(load loadEntry, logger *slog.Logger) http.HandlerFunc {
 
 func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		body, err := load(request.Context())
+		var selected *entry.Feed
+		if name := request.PathValue("feed"); name != "" {
+			parsed, err := entry.ParseFeed(name)
+			if err != nil {
+				writeError(response, http.StatusBadRequest, err.Error())
+				return
+			}
+			selected = &parsed
+		}
+		body, err := load(request.Context(), selected)
 		if err != nil {
 			logger.ErrorContext(request.Context(), "load feed", "error", err)
 			writeError(response, http.StatusInternalServerError, "internal server error")
@@ -232,8 +243,16 @@ func entries(publish publishEntry, logger *slog.Logger) http.HandlerFunc {
 			writeError(response, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
+		if input.Feed != nil {
+			selected, err := entry.ParseFeed(*input.Feed)
+			if err != nil {
+				writeError(response, http.StatusUnprocessableEntity, err.Error())
+				return
+			}
+			values.Feed = &selected
+		}
 
-		created, err := publish(request.Context(), values)
+		id, created, err := publish(request.Context(), values)
 		if err != nil {
 			logger.ErrorContext(request.Context(), "publish entry", "error", err)
 			writeError(response, http.StatusInternalServerError, "internal server error")
@@ -250,12 +269,12 @@ func entries(publish publishEntry, logger *slog.Logger) http.HandlerFunc {
 		logger.InfoContext(
 			request.Context(),
 			"entry published",
-			"id", values.ID,
+			"id", id,
 			"result", result,
 		)
 		writeJSON(response, status, entryResponse{
 			Result: result,
-			ID:     values.ID,
+			ID:     id,
 		})
 	}
 }

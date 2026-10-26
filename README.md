@@ -10,12 +10,14 @@ Feedway puts content from your automations into the same reading queue as your
 RSS subscriptions.
 
 n8n workflows, scripts, agents, and LLM pipelines send HTML to Feedway through
-a simple API. Feedway publishes everything as one
-[JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) subscription that you add
-to Miniflux once:
+a simple API. Feedway publishes an aggregate
+[JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/) for all entries, plus
+filtered feeds when you want separate subscriptions:
 
 ```text
 https://feed.example.com/feed.json
+# or, for one feed identifier:
+https://feed.example.com/feeds/daily-briefing/feed.json
 ```
 
 JSON Feed is an alternative feed format to RSS. Miniflux reads it in the same
@@ -25,13 +27,14 @@ mark them as read. The name combines **feed** and **gateway**.
 ```mermaid
 flowchart LR
     N["n8n · scripts · agents"] -->|"POST HTML"| F["Feedway"]
-    F -->|"one JSON Feed subscription"| M["Miniflux"]
+    F -->|"aggregate or selected JSON Feed"| M["Miniflux"]
     M --> R["Read · archive · mark as read"]
 ```
 
-Different automations can publish into the same stream. Feedway handles HTML
-sanitization, retry deduplication, and retention; Miniflux handles subscriptions,
-unread state, history, and reading. Each project stays small by doing one job.
+Every publication appears in the aggregate stream. Feed identifiers also let
+different automations keep subscriptions separate. Feedway handles HTML sanitization,
+retry deduplication, and retention; Miniflux handles subscriptions, unread
+state, history, and reading. Each project stays small by doing one job.
 
 ## 🔄 How it works
 
@@ -47,8 +50,9 @@ reading workflow.
 **Feedway changes the flow:**
 
 1. **You push** HTML to Feedway through one authenticated API endpoint.
-2. **Feedway sanitizes and stores** each entry, then serves entries as a public
-   JSON Feed at `/feed.json` and individual pages under `/entries/{id}`.
+2. **Feedway sanitizes and stores** each entry, then serves all entries at
+   `/feed.json` or one feed identifier at `/feeds/{feed}/feed.json`. Individual
+   pages live under `/entries/{id}`.
 3. **Your feed reader pulls** that feed and handles reading, archiving, and
    history.
 
@@ -59,11 +63,13 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 ## ✨ What it does
 
 - exposes one authenticated endpoint for publishing entries;
-- serves one public feed at `/feed.json`;
+- serves an aggregate feed at `/feed.json` and filtered feeds at
+  `/feeds/{feed}/feed.json`;
 - serves a minimal public HTML page for each retained entry;
 - accepts optional `data_json` alongside HTML and exposes it as a public JSON attachment;
 - supports absolute entry permalinks through an optional `BASE_URL`;
-- deduplicates retries using a deterministic content hash;
+- assigns new entries opaque UUIDv7 IDs and deduplicates retries by content
+  within the selected feed;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
 - keeps up to the latest 100 entries by default, configurable with `FEED_RESPONSE_MAX_ENTRIES`, within the 4 MiB feed limit;
 - signals when those feed limits omit older entries still stored in the database;
@@ -72,8 +78,9 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - runs with PostgreSQL 18 in Docker Compose;
 - ships as a static, non-root container built from `scratch`.
 
-There are deliberately no users, dashboards, feed-management APIs, plugins, or
-configuration for values that can be conventions.
+Feed identifiers are supplied when publishing; there is no feed registry,
+display-name metadata, or feed-management API. There are deliberately no users,
+dashboards, plugins, or configuration for values that can be conventions.
 
 ## 💡 Example use cases
 
@@ -113,7 +120,8 @@ curl --fail http://localhost:8080/readyz
 ```
 
 The example publishes host port 8080 to the container's port 80 and prepares
-the single database table automatically. There is no migration command to run.
+the entries table and upgrades its schema automatically at startup. There is no
+migration command to run.
 It uses `ghcr.io/zewelor/feedway:latest`; every green push to `main` also
 publishes an immutable full-commit-SHA image tag.
 
@@ -129,21 +137,25 @@ curl --fail-with-body \
   --header 'Content-Type: application/json' \
   --data '{
     "title": "Morning briefing",
-    "content_html": "<h2>Today</h2><p>Three systems reported healthy.</p>"
+    "content_html": "<h2>Today</h2><p>Three systems reported healthy.</p>",
+    "feed": "daily-briefing"
   }' \
   http://localhost:8080/api/v1/entries
 ```
 
-The first request returns `201 Created`. Publishing the same final content
-again returns `200 OK` with `"result":"deduplicated"` and the same ID, making
-retries safe without client-generated identifiers.
+The first request returns `201 Created`. Publishing the same final content to
+the same feed again returns `200 OK` with `"result":"deduplicated"` and the
+same ID. The optional `feed` may be omitted or set to `null` to publish only in
+the aggregate feed. Different feeds can contain the same content as separate
+entries. New IDs are opaque UUIDv7 values; existing IDs remain stable.
 
 Add an optional native JSON value in `data_json` to publish structured data
 alongside the readable HTML. Feedway stores both together and advertises a
 public `/entries/{id}/data.json` attachment in the feed. Data expires with its
 entry; Feedway does not interpret its application-specific fields.
 Deduplication uses the title and sanitized HTML only; a retry with different
-JSON keeps the attachment from the first successful publication.
+JSON keeps the attachment from the first successful publication within that
+feed. Publishing the same content to another feed creates a separate entry.
 
 The complete request, response, error, feed, cache, and probe contract lives in
 the [HTTP API reference](docs/api.md).

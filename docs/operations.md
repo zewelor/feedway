@@ -48,7 +48,8 @@ RETENTION_DAYS=90
 The setting must be a positive integer.
 
 The feed's `_feedway.truncated` flag reports whether `FEED_RESPONSE_MAX_ENTRIES` or the 4 MiB
-response limit omitted entries still stored in PostgreSQL. It does not report
+response limit omitted matching entries still stored in PostgreSQL. A filtered
+feed counts only its own entries. The flag does not report
 entries already deleted by retention. A truncated feed remains a valid `200`
 response and does not prevent new publications. See
 [feed completeness](api.md#feed-completeness) for the contract.
@@ -62,6 +63,29 @@ with it. After cleanup, both `/entries/{id}` and `/entries/{id}/data.json`
 return `404`. A feed reader may retain a copy of the HTML and an attachment URL;
 the URL is not a backup of the JSON document.
 
+## Feed assignment
+
+Feed identifiers are values on entries, not separately created objects. A
+valid identifier needs no registration or environment setting. The aggregate
+`/feed.json` includes all retained entries; `/feeds/{feed}/feed.json` includes
+only entries assigned to that exact identifier. Entries without an identifier
+remain in the aggregate feed only. A valid feed with no retained entries
+returns an empty feed.
+
+The startup schema upgrade preserves existing rows and leaves their `feed`
+value `NULL`; it does not classify or move them. A publisher can assign a feed
+on new entries. Operators can deliberately reassign a retained entry with SQL:
+
+```sql
+UPDATE entries
+SET feed = 'daily-briefing'
+WHERE id = 'entry-id';
+```
+
+The public entry ID remains unchanged. If the target feed already has the same
+content, the `(feed, content_hash)` uniqueness constraint rejects the update.
+There is no public edit endpoint for reassignment.
+
 ## Troubleshooting
 
 | Symptom | Check |
@@ -70,5 +94,5 @@ the URL is not a backup of the JSON document.
 | Feedway rejects `API_TOKEN` | Generate a 64-character hexadecimal token with `openssl rand -hex 32`. |
 | `/readyz` returns `503` | Check `docker compose ps` and the PostgreSQL logs. |
 | Publishing returns `401` | Check the `Authorization: Bearer ...` header and the credential value. |
-| Publishing returns `422` | Check that HTML remains after sanitization and stays within the documented limits. |
+| Publishing returns `422` | Check the HTML limits and sanitization, and verify that `feed` is a valid lower-case identifier. |
 | Port 8080 is already allocated | Stop the conflicting process or change the published host port in Compose. The container listens on port 80 by default. |

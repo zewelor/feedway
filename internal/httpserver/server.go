@@ -54,7 +54,7 @@ func databaseHandler(config Config, pool *pgxpool.Pool, readiness *readiness, lo
 	return newHandler(
 		config.APIToken,
 		readiness,
-		func(ctx context.Context, values entry.Values) (bool, error) {
+		func(ctx context.Context, values entry.Values) (string, bool, error) {
 			return database.InsertEntry(ctx, pool, values)
 		},
 		func(ctx context.Context, id string) (entry.Published, bool, error) {
@@ -63,13 +63,25 @@ func databaseHandler(config Config, pool *pgxpool.Pool, readiness *readiness, lo
 		func(ctx context.Context, id string) ([]byte, bool, error) {
 			return database.GetEntryData(ctx, pool, id)
 		},
-		func(ctx context.Context) ([]byte, error) {
+		func(ctx context.Context, selected *entry.Feed) ([]byte, error) {
 			// One extra row distinguishes a full feed from an actually truncated one.
-			entries, err := database.ListEntries(ctx, pool, config.FeedResponseMaxEntries+1, maxFeedBytes)
+			entries, err := database.ListEntries(
+				ctx,
+				pool,
+				selected,
+				config.FeedResponseMaxEntries+1,
+				maxFeedBytes,
+			)
 			if err != nil {
 				return nil, err
 			}
-			return jsonfeed.Marshal(entries, config.BaseURL, config.FeedResponseMaxEntries, maxFeedBytes)
+			return jsonfeed.Marshal(
+				entries,
+				config.BaseURL,
+				selected,
+				config.FeedResponseMaxEntries,
+				maxFeedBytes,
+			)
 		},
 		logger,
 	)

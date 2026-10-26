@@ -19,9 +19,9 @@ func TestNormalize(t *testing.T) {
 		t.Fatalf("Normalize() error = %v", err)
 	}
 
-	const wantID = "sha256-v1:8506cee5fab15db87988e0f15c82fb23e29d31473dfd503fdd5caccb909de3e5"
-	if got.ID != wantID {
-		t.Errorf("ID = %q, want %q", got.ID, wantID)
+	const wantHash = "sha256-v1:8506cee5fab15db87988e0f15c82fb23e29d31473dfd503fdd5caccb909de3e5"
+	if got.ContentHash != wantHash {
+		t.Errorf("content hash = %q, want %q", got.ContentHash, wantHash)
 	}
 	if got.Title == nil {
 		t.Fatal("Title = nil, want a title")
@@ -168,7 +168,7 @@ func TestParseHTML(t *testing.T) {
 	}
 }
 
-func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
+func TestNormalize_GeneratesDeterministicHashFromFinalContent(t *testing.T) {
 	t.Parallel()
 
 	first, err := entry.Normalize(
@@ -187,16 +187,16 @@ func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Normalize() error = %v", err)
 	}
-	if first.ID != second.ID {
-		t.Errorf("IDs differ: %q and %q", first.ID, second.ID)
+	if first.ContentHash != second.ContentHash {
+		t.Errorf("content hashes differ: %q and %q", first.ContentHash, second.ContentHash)
 	}
 
 	changed, err := entry.Normalize("different title", `<p>content</p>`, nil)
 	if err != nil {
 		t.Fatalf("changed Normalize() error = %v", err)
 	}
-	if first.ID == changed.ID {
-		t.Errorf("ID = %q for different final content", first.ID)
+	if first.ContentHash == changed.ContentHash {
+		t.Errorf("content hash = %q for different final content", first.ContentHash)
 	}
 
 	left, err := entry.Normalize("ab", "c", nil)
@@ -207,7 +207,7 @@ func TestNormalize_GeneratesDeterministicIDFromFinalContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("right Normalize() error = %v", err)
 	}
-	if left.ID == right.ID {
-		t.Errorf("ID = %q for different field boundaries", left.ID)
+	if left.ContentHash == right.ContentHash {
+		t.Errorf("content hash = %q for different field boundaries", left.ContentHash)
 	}
 }

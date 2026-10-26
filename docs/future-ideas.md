@@ -8,8 +8,8 @@ change is explicitly accepted, and a minimal acceptance criterion is agreed.
 
 ## More feeds
 
-- a `feeds` table and feed identifiers;
-- creating, listing, updating, and deleting feeds;
+- a `feeds` registry table for feed metadata;
+- creating, listing, updating, and deleting registered feeds;
 - configurable titles, descriptions, and public URLs;
 - private feeds and per-feed tokens.
 
@@ -21,10 +21,9 @@ change is explicitly accepted, and a minimal acceptance criterion is agreed.
 - updating entries;
 - revision history or soft deletion.
 
-## Alternative identity and content
+## Alternative content and client identity
 
 - client-provided identifiers and updates to existing entries;
-- PostgreSQL-generated UUIDv7 identifiers instead of deterministic hashes;
 - separate `content_text`;
 - client-provided `published_at`;
 - authors, tags, attachments, and icons.
@@ -47,7 +46,7 @@ change is explicitly accepted, and a minimal acceptance criterion is agreed.
 ## Operations for later needs
 
 - Prometheus metrics;
-- a migration command and versioned migrations after the next schema change;
+- a migration command and versioned migrations for future schema changes;
 - migration modes and expected schema version checks;
 - batched retention and an advisory lock when data volume or replica count
   requires them;

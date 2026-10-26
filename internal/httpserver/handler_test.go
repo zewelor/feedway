@@ -164,8 +164,8 @@ func TestHandler(t *testing.T) {
 			newHandler(
 				testAPIToken,
 				readiness,
-				func(context.Context, entry.Values) (bool, error) {
-					return true, nil
+				func(context.Context, entry.Values) (string, bool, error) {
+					return "stored-id", true, nil
 				},
 				testEntry,
 				testEntryData,
@@ -350,8 +350,8 @@ func TestReadiness(t *testing.T) {
 			newHandler(
 				testAPIToken,
 				readiness,
-				func(context.Context, entry.Values) (bool, error) {
-					return true, nil
+				func(context.Context, entry.Values) (string, bool, error) {
+					return "stored-id", true, nil
 				},
 				testEntry,
 				testEntryData,
@@ -479,9 +479,9 @@ func TestPublishEntry(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			var published entry.Values
-			publish := func(_ context.Context, values entry.Values) (bool, error) {
+			publish := func(_ context.Context, values entry.Values) (string, bool, error) {
 				published = values
-				return test.created, test.publishError
+				return "stored-id", test.created, test.publishError
 			}
 
 			newHandler(
@@ -515,8 +515,11 @@ func TestPublishEntry(t *testing.T) {
 			if body.Result != test.expectedResult {
 				t.Errorf("result = %q, want %q", body.Result, test.expectedResult)
 			}
-			if body.ID != published.ID {
-				t.Errorf("ID = %q, want %q", body.ID, published.ID)
+			if body.ID != "stored-id" {
+				t.Errorf("ID = %q, want %q", body.ID, "stored-id")
+			}
+			if published.ContentHash == "" {
+				t.Fatal("publication has no content hash")
 			}
 		})
 	}
@@ -643,8 +646,8 @@ func TestEntryPage(t *testing.T) {
 			newHandler(
 				testAPIToken,
 				&readiness{database: pinger{}},
-				func(context.Context, entry.Values) (bool, error) {
-					return true, nil
+				func(context.Context, entry.Values) (string, bool, error) {
+					return "stored-id", true, nil
 				},
 				load,
 				testEntryData,
@@ -736,7 +739,7 @@ func TestFeed(t *testing.T) {
 			name:   "maximum size",
 			method: http.MethodGet,
 			path:   "/feed.json",
-			load: func(context.Context) ([]byte, error) {
+			load: func(context.Context, *entry.Feed) ([]byte, error) {
 				return []byte(strings.Repeat("x", maxFeedBytes)), nil
 			},
 			expectedStatus: http.StatusOK,
@@ -747,7 +750,7 @@ func TestFeed(t *testing.T) {
 			name:   "load error",
 			method: http.MethodGet,
 			path:   "/feed.json",
-			load: func(context.Context) ([]byte, error) {
+			load: func(context.Context, *entry.Feed) ([]byte, error) {
 				return nil, errors.New("database error")
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -766,8 +769,8 @@ func TestFeed(t *testing.T) {
 			newHandler(
 				testAPIToken,
 				&readiness{database: pinger{}},
-				func(context.Context, entry.Values) (bool, error) {
-					return true, nil
+				func(context.Context, entry.Values) (string, bool, error) {
+					return "stored-id", true, nil
 				},
 				testEntry,
 				testEntryData,
@@ -824,7 +827,7 @@ func TestFeed(t *testing.T) {
 	}
 }
 
-func testFeed(context.Context) ([]byte, error) {
+func testFeed(context.Context, *entry.Feed) ([]byte, error) {
 	return []byte(`{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`), nil
 }
 
@@ -841,12 +844,12 @@ func TestPublishDataJSON(t *testing.T) {
 	newHandler(
 		testAPIToken,
 		&readiness{database: pinger{}},
-		func(_ context.Context, values entry.Values) (bool, error) {
+		func(_ context.Context, values entry.Values) (string, bool, error) {
 			called = true
 			if got := values.DataJSON.String(); got != `{"count":9007199254740993,"sections":[]}` {
 				t.Errorf("data_json = %q", got)
 			}
-			return true, nil
+			return "stored-id", true, nil
 		},
 		testEntry,
 		testEntryData,
@@ -923,7 +926,7 @@ func TestEntryData(t *testing.T) {
 			newHandler(
 				testAPIToken,
 				&readiness{database: pinger{}},
-				func(context.Context, entry.Values) (bool, error) { return true, nil },
+				func(context.Context, entry.Values) (string, bool, error) { return "stored-id", true, nil },
 				testEntry,
 				load,
 				testFeed,

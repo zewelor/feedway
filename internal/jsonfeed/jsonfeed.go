@@ -35,19 +35,28 @@ type attachment struct {
 	MIMEType string `json:"mime_type"`
 }
 
-func Marshal(entries []entry.Published, baseURL string, maxItems, maxBytes int) ([]byte, error) {
+func Marshal(
+	entries []entry.Published,
+	baseURL string,
+	selected *entry.Feed,
+	maxItems, maxBytes int,
+) ([]byte, error) {
 	if maxItems < 1 {
 		return nil, errors.New("maximum feed entries must be positive")
 	}
 	items := make([]item, 0, min(len(entries), maxItems))
-	empty, err := marshal(items, false)
+	title := "Feedway"
+	if selected != nil {
+		title = selected.String()
+	}
+	empty, err := marshal(items, title, false)
 	if err != nil {
 		return nil, err
 	}
 	if len(empty) > maxBytes {
 		return nil, errors.New("maximum feed size is smaller than an empty feed")
 	}
-	truncatedEmpty, err := marshal(items, true)
+	truncatedEmpty, err := marshal(items, title, true)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +104,13 @@ func Marshal(entries []entry.Published, baseURL string, maxItems, maxBytes int) 
 		itemBytes = candidateBytes
 	}
 
-	return marshal(items, truncated)
+	return marshal(items, title, truncated)
 }
 
-func marshal(items []item, truncated bool) ([]byte, error) {
+func marshal(items []item, title string, truncated bool) ([]byte, error) {
 	return json.Marshal(feed{
 		Version:  version,
-		Title:    "Feedway",
+		Title:    title,
 		Items:    items,
 		Metadata: metadata{Truncated: truncated},
 	})

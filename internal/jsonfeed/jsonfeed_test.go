@@ -14,7 +14,7 @@ import (
 func TestMarshalEmptyFeed(t *testing.T) {
 	t.Parallel()
 
-	got, err := jsonfeed.Marshal(nil, "", 200, 1024)
+	got, err := jsonfeed.Marshal(nil, "", nil, 200, 1024)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
@@ -51,7 +51,7 @@ func TestMarshalReportsTruncation(t *testing.T) {
 					ContentHTML: mustParseHTML(t, "<p>report</p>"),
 				}
 			}
-			body, err := jsonfeed.Marshal(entries, "", test.limit, 1024*1024)
+			body, err := jsonfeed.Marshal(entries, "", nil, test.limit, 1024*1024)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -93,7 +93,7 @@ func TestMarshalEntries(t *testing.T) {
 			ContentHTML: secondHTML,
 			CreatedAt:   time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC),
 		},
-	}, "https://feed.example.com", 200, 1024)
+	}, "https://feed.example.com", nil, 200, 1024)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
@@ -120,7 +120,7 @@ func TestMarshalUsesRelativeEntryURLWithoutBaseURL(t *testing.T) {
 			ContentHTML: mustParseHTML(t, "<p>first</p>"),
 			CreatedAt:   time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC),
 		},
-	}, "", 200, 1024)
+	}, "", nil, 200, 1024)
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
@@ -137,15 +137,15 @@ func TestMarshalByteBoundaries(t *testing.T) {
 		{ID: "first", ContentHTML: mustParseHTML(t, "<p>first</p>")},
 		{ID: "second", ContentHTML: mustParseHTML(t, "<p>second</p>")},
 	}
-	first, err := jsonfeed.Marshal(entries[:1], "", 200, 4096)
+	first, err := jsonfeed.Marshal(entries[:1], "", nil, 200, 4096)
 	if err != nil {
 		t.Fatal(err)
 	}
-	complete, err := jsonfeed.Marshal(entries, "", 200, 4096)
+	complete, err := jsonfeed.Marshal(entries, "", nil, 200, 4096)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exact, err := jsonfeed.Marshal(entries, "", 200, len(complete))
+	exact, err := jsonfeed.Marshal(entries, "", nil, 200, len(complete))
 	if err != nil || string(exact) != string(complete) {
 		t.Fatalf("complete feed at exact byte limit: error = %v, body = %s", err, exact)
 	}
@@ -161,7 +161,7 @@ func TestMarshalByteBoundaries(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			body, err := jsonfeed.Marshal(entries, "", 200, test.limit)
+			body, err := jsonfeed.Marshal(entries, "", nil, 200, test.limit)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -187,7 +187,7 @@ func mustParseHTML(t *testing.T, value string) entry.HTML {
 func TestMarshalRejectsLimitSmallerThanEmptyFeed(t *testing.T) {
 	t.Parallel()
 
-	if _, err := jsonfeed.Marshal(nil, "", 200, 1); err == nil {
+	if _, err := jsonfeed.Marshal(nil, "", nil, 200, 1); err == nil {
 		t.Fatal("Marshal() error = nil, want size limit error")
 	}
 }
@@ -201,7 +201,7 @@ func TestMarshalDataAttachments(t *testing.T) {
 				{ID: "with-data", ContentHTML: mustParseHTML(t, "<p>report</p>"), HasDataJSON: true},
 				{ID: "without-data", ContentHTML: mustParseHTML(t, "<p>legacy</p>")},
 			}
-			body, err := jsonfeed.Marshal(entries, baseURL, 200, 4096)
+			body, err := jsonfeed.Marshal(entries, baseURL, nil, 200, 4096)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -223,11 +223,11 @@ func TestMarshalDataAttachments(t *testing.T) {
 			if attachment.URL != baseURL+"/entries/with-data/data.json" || attachment.MIMEType != "application/json" {
 				t.Errorf("attachment = %+v", attachment)
 			}
-			newest, err := jsonfeed.Marshal(entries[:1], baseURL, 200, len(body))
+			newest, err := jsonfeed.Marshal(entries[:1], baseURL, nil, 200, len(body))
 			if err != nil {
 				t.Fatal(err)
 			}
-			limited, err := jsonfeed.Marshal(entries, baseURL, 200, len(newest))
+			limited, err := jsonfeed.Marshal(entries, baseURL, nil, 200, len(newest))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -274,7 +274,7 @@ func assertTruncatedItems(t *testing.T, body []byte, want []entry.Published) {
 func TestMarshalRejectsInvalidEntryLimit(t *testing.T) {
 	t.Parallel()
 	for _, limit := range []int{0, -1} {
-		if _, err := jsonfeed.Marshal(nil, "", limit, 1024); err == nil {
+		if _, err := jsonfeed.Marshal(nil, "", nil, limit, 1024); err == nil {
 			t.Errorf("Marshal() accepted entry limit %d", limit)
 		}
 	}

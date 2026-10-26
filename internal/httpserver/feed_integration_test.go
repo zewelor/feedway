@@ -18,6 +18,25 @@ import (
 )
 
 func TestFeedTruncationLifecycle(t *testing.T) {
+	for _, selected := range []string{"", "daily-briefing"} {
+		name := selected
+		if name == "" {
+			name = "aggregate"
+		}
+		t.Run(name, func(t *testing.T) {
+			testFeedTruncationLifecycle(t, selected)
+		})
+	}
+}
+
+func testFeedTruncationLifecycle(t *testing.T, selected string) {
+	t.Helper()
+	path := "/feed.json"
+	var feed *string
+	if selected != "" {
+		path = "/feeds/" + selected + "/feed.json"
+		feed = &selected
+	}
 	const feedLimit = 150
 	createHTTPTestDatabase(t)
 	pool, err := database.Open(t.Context(), dataTestConfig)
@@ -80,30 +99,32 @@ func TestFeedTruncationLifecycle(t *testing.T) {
 		}
 		return feed
 	}
-	body, _ := request(http.MethodGet, "/feed.json", "", "", http.StatusOK)
+	body, _ := request(http.MethodGet, path, "", "", http.StatusOK)
 	if empty := decode(body); len(empty.Items) != 0 || empty.Metadata.Truncated {
 		t.Fatal("empty database is marked truncated or has entries")
 	}
 	if _, err := pool.Exec(t.Context(), `
-		INSERT INTO entries (id, content_html, created_at)
-		SELECT 'sha256-v1:' || lpad(to_hex(number), 64, '0'), '<p>report</p>',
-			now() - ($1+1-number) * interval '1 second'
+		INSERT INTO entries (id, content_hash, content_html, created_at, feed)
+		SELECT 'sha256-v1:' || lpad(to_hex(number), 64, '0'),
+		       'sha256-v1:' || lpad(to_hex(number), 64, '0'), '<p>report</p>',
+			now() - ($1+1-number) * interval '1 second', $2
 		FROM generate_series(1, $1) AS number
-	`, feedLimit); err != nil {
+	`, feedLimit, feed); err != nil {
 		t.Fatal(err)
 	}
-	completeBody, completeHeaders := request(http.MethodGet, "/feed.json", "", "", http.StatusOK)
+	completeBody, completeHeaders := request(http.MethodGet, path, "", "", http.StatusOK)
 	complete := decode(completeBody)
 	if len(complete.Items) != feedLimit || complete.Metadata.Truncated {
 		t.Fatal("entries at the count limit are incorrectly truncated")
 	}
 	if _, err := pool.Exec(t.Context(), `
-		INSERT INTO entries (id, content_html, created_at)
-		VALUES ('sha256-v1:' || repeat('0', 64), '<p>older</p>', now() - interval '31 days')
-	`); err != nil {
+		INSERT INTO entries (id, content_hash, content_html, created_at, feed)
+		VALUES ('sha256-v1:' || repeat('0', 64), 'sha256-v1:' || repeat('0', 64),
+			'<p>older</p>', now() - interval '31 days', $1)
+	`, feed); err != nil {
 		t.Fatal(err)
 	}
-	truncatedBody, truncatedHeaders := request(http.MethodGet, "/feed.json", completeHeaders.Get("ETag"), "",
+	truncatedBody, truncatedHeaders := request(http.MethodGet, path, completeHeaders.Get("ETag"), "",
 		http.StatusOK)
 	truncated := decode(truncatedBody)
 	if len(truncated.Items) != feedLimit || !truncated.Metadata.Truncated {
@@ -117,12 +138,12 @@ func TestFeedTruncationLifecycle(t *testing.T) {
 	if completeHeaders.Get("ETag") == truncatedHeaders.Get("ETag") {
 		t.Fatal("truncation metadata did not change the ETag")
 	}
-	head, headers := request(http.MethodHead, "/feed.json", "", "", http.StatusOK)
+	head, headers := request(http.MethodHead, path, "", "", http.StatusOK)
 	if len(head) != 0 || headers.Get("Content-Length") != strconv.Itoa(len(truncatedBody)) ||
 		headers.Get("ETag") != truncatedHeaders.Get("ETag") {
 		t.Fatalf("HEAD differs from GET: headers = %v, body bytes = %d", headers, len(head))
 	}
-	unchanged, _ := request(http.MethodGet, "/feed.json", truncatedHeaders.Get("ETag"), "",
+	unchanged, _ := request(http.MethodGet, path, truncatedHeaders.Get("ETag"), "",
 		http.StatusNotModified)
 	if len(unchanged) != 0 {
 		t.Fatal("304 has a response body")
@@ -130,7 +151,7 @@ func TestFeedTruncationLifecycle(t *testing.T) {
 	if err := database.DeleteExpiredEntries(t.Context(), pool, 30); err != nil {
 		t.Fatal(err)
 	}
-	retainedBody, _ := request(http.MethodGet, "/feed.json", "", "", http.StatusOK)
+	retainedBody, _ := request(http.MethodGet, path, "", "", http.StatusOK)
 	if !bytes.Equal(retainedBody, completeBody) {
 		t.Fatal("retention did not restore the complete feed")
 	}
@@ -139,9 +160,10 @@ func TestFeedTruncationLifecycle(t *testing.T) {
 		if _, err := pool.Exec(t.Context(), "UPDATE entries SET content_html = $1", contentHTML); err != nil {
 			t.Fatal(err)
 		}
-		largeBody, _ := request(http.MethodGet, "/feed.json", "", "", http.StatusOK)
+		largeBody, _ := request(http.MethodGet, path, "", "", http.StatusOK)
 		large := decode(largeBody)
-		if !large.Metadata.Truncated || len(large.Items) == 0 || len(large.Items) >= feedLimit || len(largeBody) > maxFeedBytes {
+		invalidCount := len(large.Items) == 0 || len(large.Items) >= feedLimit
+		if !large.Metadata.Truncated || invalidCount || len(largeBody) > maxFeedBytes {
 			t.Fatalf("byte-limited feed: truncated = %v, items = %d, bytes = %d",
 				large.Metadata.Truncated, len(large.Items), len(largeBody))
 		}
@@ -150,5 +172,12 @@ func TestFeedTruncationLifecycle(t *testing.T) {
 	checkByteLimit("<p>" + strings.Repeat("x", 32*1024) + "</p>")
 	// Raw HTML fits the SQL budget, but JSON escaping of U+2028 exceeds the response limit.
 	checkByteLimit("<p>" + strings.Repeat("\u2028", 8*1024) + "</p>")
-	request(http.MethodPost, "/api/v1/entries", "", `{"content_html":"<p>new report</p>"}`, http.StatusCreated)
+	body, err = json.Marshal(struct {
+		Feed    *string `json:"feed"`
+		Content string  `json:"content_html"`
+	}{Feed: feed, Content: "<p>new report</p>"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request(http.MethodPost, "/api/v1/entries", "", string(body), http.StatusCreated)
 }

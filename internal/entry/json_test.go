@@ -83,8 +83,8 @@ func TestNormalizeDataJSONDoesNotAffectIdentity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if values.ID != without.ID {
-			t.Errorf("data_json %q changed the id from %q to %q", data, without.ID, values.ID)
+		if values.ContentHash != without.ContentHash {
+			t.Errorf("data_json %q changed the content hash from %q to %q", data, without.ContentHash, values.ContentHash)
 		}
 	}
 }

@@ -5,11 +5,7 @@ package database
 import (
 	"fmt"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
-
-	"github.com/zewelor/feedway/internal/entry"
 )
 
 var testConfig = Config{
@@ -31,8 +27,22 @@ func TestPrepare(t *testing.T) {
 	if err := Prepare(t.Context(), pool); err != nil {
 		t.Fatalf("first Prepare() error = %v", err)
 	}
+	const constraintQuery = `
+		SELECT oid FROM pg_constraint
+		WHERE conrelid = 'entries'::regclass AND conname = 'entries_public_id_valid'
+	`
+	var before, after uint32
+	if err := pool.QueryRow(t.Context(), constraintQuery).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
 	if err := Prepare(t.Context(), pool); err != nil {
 		t.Fatalf("second Prepare() error = %v", err)
+	}
+	if err := pool.QueryRow(t.Context(), constraintQuery).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if before != after {
+		t.Fatal("repeated schema preparation recreated the public ID constraint")
 	}
 
 	var tableName string
@@ -79,78 +89,6 @@ func TestOpenUnavailableDatabase(t *testing.T) {
 	}
 }
 
-func TestInsertEntryDeduplicatesConcurrentWrites(t *testing.T) {
-	pool, err := Open(t.Context(), testConfig)
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	if err := Prepare(t.Context(), pool); err != nil {
-		t.Fatalf("Prepare() error = %v", err)
-	}
-	if _, err := pool.Exec(t.Context(), "TRUNCATE entries"); err != nil {
-		t.Fatalf("truncate entries: %v", err)
-	}
-
-	values, err := entry.Normalize("title", "<p>content</p>", nil)
-	if err != nil {
-		t.Fatalf("Normalize() error = %v", err)
-	}
-
-	const publications = 16
-	var created atomic.Int32
-	var waitGroup sync.WaitGroup
-	insertErrors := make(chan error, publications)
-	for range publications {
-		waitGroup.Go(func() {
-			wasCreated, err := InsertEntry(t.Context(), pool, values)
-			if err != nil {
-				insertErrors <- err
-				return
-			}
-			if wasCreated {
-				created.Add(1)
-			}
-		})
-	}
-	waitGroup.Wait()
-	close(insertErrors)
-
-	for err := range insertErrors {
-		t.Errorf("InsertEntry() error = %v", err)
-	}
-	if created.Load() != 1 {
-		t.Errorf("created count = %d, want 1", created.Load())
-	}
-
-	var (
-		count       int
-		title       *string
-		contentHTML string
-	)
-	if err := pool.QueryRow(
-		t.Context(),
-		`
-			SELECT count(*), min(title), min(content_html)
-			FROM entries
-			WHERE id = $1
-		`,
-		values.ID,
-	).Scan(&count, &title, &contentHTML); err != nil {
-		t.Fatalf("count entries: %v", err)
-	}
-	if count != 1 {
-		t.Errorf("entry count = %d, want 1", count)
-	}
-	if title == nil || *title != "title" {
-		t.Errorf("title = %v, want title", title)
-	}
-	if contentHTML != "<p>content</p>" {
-		t.Errorf("content_html = %q, want %q", contentHTML, "<p>content</p>")
-	}
-}
-
 func TestGetEntry(t *testing.T) {
 	pool, err := Open(t.Context(), testConfig)
 	if err != nil {
@@ -169,8 +107,8 @@ func TestGetEntry(t *testing.T) {
 	if _, err := pool.Exec(
 		t.Context(),
 		`
-			INSERT INTO entries (id, title, content_html)
-			VALUES ($1, 'title', '<p>content</p>')
+			INSERT INTO entries (id, content_hash, title, content_html)
+			VALUES ($1, $1, 'title', '<p>content</p>')
 		`,
 		id,
 	); err != nil {
@@ -224,8 +162,8 @@ func TestGetEntryRejectsUnsanitizedHTML(t *testing.T) {
 	if _, err := pool.Exec(
 		t.Context(),
 		`
-			INSERT INTO entries (id, content_html)
-			VALUES ($1, '<script>alert(1)</script>')
+			INSERT INTO entries (id, content_hash, content_html)
+			VALUES ($1, $1, '<script>alert(1)</script>')
 		`,
 		id,
 	); err != nil {
@@ -257,8 +195,9 @@ func TestListEntriesUsesRequestedLimit(t *testing.T) {
 	if _, err := pool.Exec(
 		t.Context(),
 		`
-			INSERT INTO entries (id, title, content_html, created_at)
+			INSERT INTO entries (id, content_hash, title, content_html, created_at)
 			SELECT
+				'sha256-v1:' || lpad(to_hex(number), 64, '0'),
 				'sha256-v1:' || lpad(to_hex(number), 64, '0'),
 				CASE
 					WHEN number = 101 THEN 'newest by id'
@@ -273,7 +212,7 @@ func TestListEntriesUsesRequestedLimit(t *testing.T) {
 		t.Fatalf("insert entries: %v", err)
 	}
 
-	entries, err := ListEntries(t.Context(), pool, 100, 4*1024*1024)
+	entries, err := ListEntries(t.Context(), pool, nil, 100, 4*1024*1024)
 	if err != nil {
 		t.Fatalf("ListEntries() error = %v", err)
 	}
@@ -293,7 +232,7 @@ func TestListEntriesUsesRequestedLimit(t *testing.T) {
 	if entries[99].ID != wantLastID {
 		t.Errorf("last ID = %q, want %q", entries[99].ID, wantLastID)
 	}
-	withExtra, err := ListEntries(t.Context(), pool, 101, 4*1024*1024)
+	withExtra, err := ListEntries(t.Context(), pool, nil, 101, 4*1024*1024)
 	if err != nil {
 		t.Fatalf("ListEntries() lookahead error = %v", err)
 	}
@@ -316,8 +255,9 @@ func TestListEntriesBoundsHTMLRead(t *testing.T) {
 	}
 	// Each entry contains exactly 32 bytes of HTML; equal timestamps exercise ID ordering.
 	if _, err := pool.Exec(t.Context(), `
-		INSERT INTO entries (id, content_html, created_at)
+		INSERT INTO entries (id, content_hash, content_html, created_at)
 		SELECT 'sha256-v1:' || lpad(to_hex(number), 64, '0'),
+		       'sha256-v1:' || lpad(to_hex(number), 64, '0'),
 		       '<p>' || repeat('x', 25) || '</p>', '2026-01-01T00:00:00Z'::timestamptz
 		FROM generate_series(1, 6) AS number
 	`); err != nil {
@@ -336,7 +276,7 @@ func TestListEntriesBoundsHTMLRead(t *testing.T) {
 		{name: "count limit applies first", limit: 2, budget: 64, wantCount: 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			entries, err := ListEntries(t.Context(), pool, test.limit, test.budget)
+			entries, err := ListEntries(t.Context(), pool, nil, test.limit, test.budget)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -371,11 +311,13 @@ func TestDeleteExpiredEntries(t *testing.T) {
 	if _, err := pool.Exec(
 		t.Context(),
 		`
-			INSERT INTO entries (id, content_html, created_at)
+			INSERT INTO entries (id, content_hash, content_html, created_at)
 			VALUES
 				('sha256-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+					'sha256-v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
 					'<p>expired</p>', now() - interval '61 days'),
 				('sha256-v1:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+					'sha256-v1:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
 					'<p>retained</p>', now() - interval '59 days')
 		`,
 	); err != nil {
