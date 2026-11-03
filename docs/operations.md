@@ -72,6 +72,11 @@ only entries assigned to that exact identifier. Entries without an identifier
 remain in the aggregate feed only. A valid feed with no retained entries
 returns an empty feed.
 
+The public home page at `/` discovers named feeds from retained entries.
+New feed identifiers appear after publishing; when retention deletes the last
+entry for an identifier, its list item disappears. Unassigned entries do not
+create a home-page item. See [the home-page contract](api.md#browse-available-feeds).
+
 The startup schema upgrade preserves existing rows and leaves their `feed`
 value `NULL`; it does not classify or move them. A publisher can assign a feed
 on new entries. Operators can deliberately reassign a retained entry with SQL:

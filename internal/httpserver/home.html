@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedway</title>
+  <style>
+    body {
+      max-width: 32rem;
+      margin: 5rem auto;
+      padding: 0 1.5rem;
+      color: #242424;
+      background: #fff;
+      font: 16px/1.6 system-ui, sans-serif;
+    }
+    h1 {
+      margin: 0 0 1.5rem;
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -.6px;
+    }
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid #e8e8e8;
+    }
+    li { border-bottom: 1px solid #e8e8e8; }
+    a {
+      display: flex;
+      align-items: center;
+      gap: .875rem;
+      padding: 1.25rem .75rem;
+      color: inherit;
+      font-size: 17px;
+      font-weight: 500;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+    .rss { width: 18px; height: 18px; flex: none; color: #888; }
+    a:hover { background: #f7f7f7; }
+    a:focus-visible { outline: 2px solid #555; outline-offset: -2px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Feedway</h1>
+    {{if .}}
+    <ul>
+      {{range .}}
+      <li>
+        <a href="/feeds/{{.Feed}}/feed.json">
+          <svg class="rss" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="5" cy="19" r="1.8" fill="currentColor"/>
+            <path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"
+              stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>{{.Name}}</span>
+        </a>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p>No feeds yet.</p>
+    {{end}}
+  </main>
+</body>
+</html>

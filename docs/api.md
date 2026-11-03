@@ -1,9 +1,9 @@
 # HTTP API
 
-Feedway exposes one authenticated publishing endpoint, an aggregate JSON Feed
-and filtered JSON Feeds, public entry pages and optional JSON attachments, and
-two operational probes. Paths are relative to the HTTP origin where the
-container is published.
+Feedway exposes one authenticated publishing endpoint, a public home page, an
+aggregate JSON Feed and filtered JSON Feeds, public entry pages and optional
+JSON attachments, and two operational probes. Paths are relative to the HTTP
+origin where the container is published.
 
 ## Feed identifiers
 
@@ -39,9 +39,46 @@ The response also includes:
 WWW-Authenticate: Bearer
 ```
 
-The feed, individual entry pages, JSON attachments, and probes are public.
+The home page, feeds, individual entry pages, JSON attachments, and probes are public.
 Put TLS and any additional access control at a reverse proxy when the service is exposed beyond
 a trusted network.
+
+## Browse available feeds
+
+### `GET /`
+
+Returns a minimal HTML home page titled `Feedway`. It lists each distinct,
+non-null feed identifier currently present on retained entries, sorted by
+identifier. Each row has a decorative RSS icon and an origin-root-relative
+link to `/feeds/{feed}/feed.json`; the linked representation is JSON Feed,
+not RSS XML. Labels replace hyphens with spaces and capitalize each word,
+for example `daily-briefing` becomes `Daily Briefing`. Labels are derived
+from identifiers, not stored metadata.
+
+The page lists all available identifiers regardless of `FEED_RESPONSE_MAX_ENTRIES`
+and the 4 MiB JSON Feed response limit. Entries without an identifier do not
+create a list item. The page shows `No feeds yet.` when no named feeds exist,
+including a database containing only unassigned entries. After retention
+deletes the last entry assigned to an identifier, that feed disappears from
+the list. Its filtered feed URL continues to return an empty JSON Feed.
+
+The page contains inline CSS and SVG icons, without JavaScript or external
+assets. Successful responses use:
+
+```http
+Content-Type: text/html; charset=utf-8
+Content-Length: <response bytes>
+X-Content-Type-Options: nosniff
+```
+
+A database or rendering failure returns `500 Internal Server Error` with a
+generic plain-text body; internal details are logged. The page does not
+provide ETag or conditional requests.
+
+### `HEAD /`
+
+Returns the same status and headers as `GET /` without a response body.
+Only the exact root path serves the home page; unknown paths still return `404`.
 
 ## Publish an entry
 

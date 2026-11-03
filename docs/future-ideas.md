@@ -38,7 +38,7 @@ change is explicitly accepted, and a minimal acceptance criterion is agreed.
 - Huma, Chi, OpenAPI, and Swagger UI if the number of endpoints justifies a
   framework;
 - Problem Details for a larger API;
-- a landing page, discovery, and `home_page_url`;
+- JSON Feed `home_page_url` metadata;
 - an optional `feed_url`;
 - RSS, Atom, WebSub, and public feed pagination;
 - application-level HTTP compression.

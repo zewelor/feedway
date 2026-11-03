@@ -83,6 +83,9 @@ func databaseHandler(config Config, pool *pgxpool.Pool, readiness *readiness, lo
 				maxFeedBytes,
 			)
 		},
+		func(ctx context.Context) ([]entry.Feed, error) {
+			return database.ListFeeds(ctx, pool)
+		},
 		logger,
 	)
 }

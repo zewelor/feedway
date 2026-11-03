@@ -134,7 +134,7 @@ func TestHandler(t *testing.T) {
 		{
 			name:           "unknown route is not found",
 			method:         http.MethodGet,
-			path:           "/",
+			path:           "/missing",
 			expectedStatus: http.StatusNotFound,
 		},
 		{
@@ -170,6 +170,7 @@ func TestHandler(t *testing.T) {
 				testEntry,
 				testEntryData,
 				testFeed,
+				nil,
 				logger,
 			).ServeHTTP(response, request)
 
@@ -356,6 +357,7 @@ func TestReadiness(t *testing.T) {
 				testEntry,
 				testEntryData,
 				testFeed,
+				nil,
 				logger,
 			).ServeHTTP(response, request)
 
@@ -491,6 +493,7 @@ func TestPublishEntry(t *testing.T) {
 				testEntry,
 				testEntryData,
 				testFeed,
+				nil,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
 
@@ -652,6 +655,7 @@ func TestEntryPage(t *testing.T) {
 				load,
 				testEntryData,
 				testFeed,
+				nil,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
 
@@ -775,6 +779,7 @@ func TestFeed(t *testing.T) {
 				testEntry,
 				testEntryData,
 				test.load,
+				nil,
 				slog.New(slog.NewTextHandler(io.Discard, nil)),
 			).ServeHTTP(response, request)
 
@@ -854,6 +859,7 @@ func TestPublishDataJSON(t *testing.T) {
 		testEntry,
 		testEntryData,
 		testFeed,
+		nil,
 		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	).ServeHTTP(response, request)
 	if response.Code != http.StatusCreated || !called {
@@ -930,6 +936,7 @@ func TestEntryData(t *testing.T) {
 				testEntry,
 				load,
 				testFeed,
+				nil,
 				slog.New(slog.NewJSONHandler(&logs, nil)),
 			).ServeHTTP(response, httptest.NewRequest(test.method, "/entries/test-id/data.json", nil))
 			if response.Code != test.status || response.Body.String() != test.body {

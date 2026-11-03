@@ -257,6 +257,34 @@ func GetEntryData(ctx context.Context, pool *pgxpool.Pool, id string) ([]byte, b
 	return data, true, nil
 }
 
+func ListFeeds(ctx context.Context, pool *pgxpool.Pool) ([]entry.Feed, error) {
+	listCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+
+	rows, err := pool.Query(listCtx, "SELECT DISTINCT feed FROM entries WHERE feed IS NOT NULL ORDER BY feed")
+	if err != nil {
+		return nil, fmt.Errorf("list feeds: %w", err)
+	}
+	defer rows.Close()
+
+	feeds := []entry.Feed{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan feed: %w", err)
+		}
+		feed, err := entry.ParseFeed(name)
+		if err != nil {
+			return nil, fmt.Errorf("validate feed: %w", err)
+		}
+		feeds = append(feeds, feed)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate feeds: %w", err)
+	}
+	return feeds, nil
+}
+
 func DeleteExpiredEntries(ctx context.Context, pool *pgxpool.Pool, retentionDays int) error {
 	deleteCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()

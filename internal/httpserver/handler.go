@@ -77,9 +77,11 @@ func newHandler(
 	loadOne loadEntry,
 	loadData loadEntryData,
 	load loadFeed,
+	list loadFeeds,
 	logger *slog.Logger,
 ) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", homePage(list, logger))
 	mux.HandleFunc("GET /healthz", health)
 	mux.HandleFunc("GET /readyz", readiness.handle(logger))
 	mux.Handle("POST /api/v1/entries", authenticate(
@@ -142,16 +144,20 @@ func entryPage(load loadEntry, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 
-		response.Header().Set("Content-Type", "text/html; charset=utf-8")
-		response.Header().Set("Content-Length", strconv.Itoa(body.Len()))
-		response.Header().Set("X-Content-Type-Options", "nosniff")
-		response.WriteHeader(http.StatusOK)
-		if request.Method == http.MethodHead {
-			return
-		}
-		if _, err := response.Write(body.Bytes()); err != nil {
-			return
-		}
+		writeHTML(response, request, body.Bytes())
+	}
+}
+
+func writeHTML(response http.ResponseWriter, request *http.Request, body []byte) {
+	response.Header().Set("Content-Type", "text/html; charset=utf-8")
+	response.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	response.Header().Set("X-Content-Type-Options", "nosniff")
+	response.WriteHeader(http.StatusOK)
+	if request.Method == http.MethodHead {
+		return
+	}
+	if _, err := response.Write(body); err != nil {
+		return
 	}
 }
 
