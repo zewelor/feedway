@@ -65,8 +65,8 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - exposes one authenticated endpoint for publishing entries;
 - serves an aggregate feed at `/feed.json` and filtered feeds at
   `/feeds/{feed}/feed.json`;
-- lists available feeds on a minimal public home page at `/`, with RSS icons
-  and links to their JSON Feeds;
+- lists available feeds on a minimal public home page at `/`, with links and
+  HTML autodiscovery metadata for each named JSON Feed;
 - serves a minimal public HTML page for each retained entry;
 - accepts optional `data_json` alongside HTML and exposes it as a public JSON attachment;
 - supports absolute entry permalinks and feed URL metadata through an optional

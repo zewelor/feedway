@@ -72,24 +72,54 @@ func TestHomepageLifecycle(t *testing.T) {
 			t.Fatalf("homepage headers = %v", headers)
 		}
 		page := string(body)
-		if got := strings.Count(page, `href="`); got != len(want) {
-			t.Fatalf("homepage has %d links, want %d", got, len(want))
+		_, page, found := strings.Cut(page, "<head>")
+		if !found {
+			t.Fatal("homepage has no head")
 		}
+		head, page, found := strings.Cut(page, "</head>")
+		if !found {
+			t.Fatal("homepage head is not closed")
+		}
+		if got := strings.Count(head, "<link"); got != len(want) {
+			t.Fatalf("homepage head has %d discovery links, want %d", got, len(want))
+		}
+		if got := strings.Count(page, `<a href="`); got != len(want) {
+			t.Fatalf("homepage body has %d feed anchors, want %d", got, len(want))
+		}
+		lastHeadLink := -1
 		for _, link := range want {
-			_, after, found := strings.Cut(page, `href="`+link.URL+`"`)
-			if !found {
-				t.Fatalf("missing or out-of-order feed link %q", link.URL)
+			discoveryLink := `<link rel="alternate" type="application/feed+json" title="` +
+				link.Name + `" href="` + link.URL + `">`
+			headIndex := strings.Index(head, discoveryLink)
+			if headIndex < 0 || headIndex <= lastHeadLink {
+				t.Fatalf("missing or out-of-order discovery link %q", link.URL)
 			}
-			content, rest, closed := strings.Cut(after, "</a>")
-			if !closed || !strings.Contains(content, link.Name) {
+			lastHeadLink = headIndex
+
+			anchor := `<a href="` + link.URL + `">`
+			_, rest, found := strings.Cut(page, anchor)
+			if !found {
+				t.Fatalf("missing or out-of-order feed anchor %q", link.URL)
+			}
+			content, remainingPage, closed := strings.Cut(rest, "</a>")
+			if !closed || !strings.Contains(content, `<span>`+link.Name+`</span>`) {
 				t.Fatalf("feed link %q is missing label %q", link.URL, link.Name)
 			}
-			page = rest
+			page = remainingPage
 		}
-		head, headHeaders := request(http.MethodHead, "/", "", http.StatusOK)
-		if len(head) != 0 || headHeaders.Get("Content-Length") != headers.Get("Content-Length") ||
-			headHeaders.Get("Content-Type") != headers.Get("Content-Type") {
-			t.Fatalf("HEAD mismatch: body=%q, headers=%v", head, headHeaders)
+		headBody, headHeaders := request(http.MethodHead, "/", "", http.StatusOK)
+		if len(headBody) != 0 {
+			t.Fatalf("HEAD contains a body: %q", headBody)
+		}
+		for _, name := range []string{"Content-Length", "Content-Type", "X-Content-Type-Options"} {
+			if headHeaders.Get(name) != headers.Get(name) {
+				t.Fatalf(
+					"HEAD %s = %q, want %q",
+					name,
+					headHeaders.Get(name),
+					headers.Get(name),
+				)
+			}
 		}
 		return body
 	}

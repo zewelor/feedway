@@ -3,6 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{range .}}
+  <link rel="alternate" type="application/feed+json" title="{{.Name}}" href="/feeds/{{.Feed}}/feed.json">
+  {{end}}
   <title>Feedway</title>
   <style>
     body {

@@ -51,9 +51,18 @@ Returns a minimal HTML home page titled `Feedway`. It lists each distinct,
 non-null feed identifier currently present on retained entries, sorted by
 identifier. Each row has a decorative RSS icon and an origin-root-relative
 link to `/feeds/{feed}/feed.json`; the linked representation is JSON Feed,
-not RSS XML. Labels replace hyphens with spaces and capitalize each word,
-for example `daily-briefing` becomes `Daily Briefing`. Labels are derived
-from identifiers, not stored metadata.
+not RSS XML. The `<head>` contains one discovery link per listed feed, with its
+friendly display label in `title` and the same path as the row. For example:
+
+```html
+<link rel="alternate" type="application/feed+json" title="Daily Briefing" href="/feeds/daily-briefing/feed.json">
+```
+
+Discovery links use the same identifier sort order as the rows. The aggregate
+`/feed.json` is not advertised, and no discovery links appear when there are no
+named feeds. Labels replace hyphens with spaces and capitalize each word, for
+example `daily-briefing` becomes `Daily Briefing`. Labels are derived from
+identifiers, not stored metadata.
 
 The page lists all available identifiers regardless of `FEED_RESPONSE_MAX_ENTRIES`
 and the 4 MiB JSON Feed response limit. Entries without an identifier do not

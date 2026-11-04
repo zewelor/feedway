@@ -67,6 +67,11 @@ To keep a selected group separate, add its feed URL instead, for example:
 https://feed.example.com/feeds/daily-briefing/feed.json
 ```
 
+The home page at `https://feed.example.com/` lists available named feeds and
+advertises each one for clients that support HTML feed autodiscovery. The
+aggregate `/feed.json` remains a direct subscription URL and is not included
+among those named-feed discovery links.
+
 Feedway does not require a feed to be registered first. A valid identifier
 with no retained entries returns an empty feed. The aggregate feed is titled
 `Feedway`; a filtered feed uses its identifier as the title.
