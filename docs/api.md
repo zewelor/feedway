@@ -357,6 +357,12 @@ curl --include \
 ```
 
 An unchanged representation returns `304 Not Modified` with no body.
+For both feed routes, `GET` and `HEAD` use weak ETag comparison: either
+`"<etag>"` or `W/"<etag>"` matches the current tag. `If-None-Match` also accepts
+a comma-separated list of tags, including repeated header lines; any matching
+tag returns `304`. A standalone `If-None-Match: *` returns `304` for an existing
+feed representation, including an empty feed. Malformed field values are
+ignored and the request returns the normal `200` response.
 
 ## Read an entry
 

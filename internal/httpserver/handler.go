@@ -13,6 +13,7 @@ import (
 	"mime"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zewelor/feedway/internal/entry"
@@ -186,7 +187,7 @@ func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {
 		response.Header().Set("ETag", etag)
 		response.Header().Set("Content-Length", strconv.Itoa(len(body)))
 
-		if request.Header.Get("If-None-Match") == etag {
+		if matchesIfNoneMatch(request.Header.Values("If-None-Match"), etag) {
 			response.WriteHeader(http.StatusNotModified)
 			return
 		}
@@ -200,6 +201,41 @@ func feed(load loadFeed, logger *slog.Logger) http.HandlerFunc {
 			return
 		}
 	}
+}
+
+// matchesIfNoneMatch uses weak comparison and ignores malformed field values.
+func matchesIfNoneMatch(values []string, etag string) bool {
+	value := strings.Trim(strings.Join(values, ","), " \t")
+	if value == "*" {
+		return true
+	}
+
+	matched := false
+	for value != "" {
+		if value[0] == ',' {
+			value = strings.Trim(value[1:], " \t")
+			continue
+		}
+		value = strings.TrimPrefix(value, "W/")
+		if !strings.HasPrefix(value, `"`) {
+			return false
+		}
+		opaque, remaining, found := strings.Cut(value[1:], `"`)
+		if !found {
+			return false
+		}
+		for index := range len(opaque) {
+			if opaque[index] < 0x21 || opaque[index] == 0x7f {
+				return false
+			}
+		}
+		matched = matched || `"`+opaque+`"` == etag
+		value = strings.Trim(remaining, " \t")
+		if value != "" && value[0] != ',' {
+			return false
+		}
+	}
+	return matched
 }
 
 func health(response http.ResponseWriter, _ *http.Request) {

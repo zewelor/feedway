@@ -832,6 +832,104 @@ func TestFeed(t *testing.T) {
 	}
 }
 
+func TestFeedConditionalRequests(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(
+		testAPIToken,
+		&readiness{database: pinger{}},
+		nil,
+		nil,
+		nil,
+		testFeed,
+		nil,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+	baseline := httptest.NewRecorder()
+	handler.ServeHTTP(baseline, httptest.NewRequest(http.MethodGet, "/feed.json", nil))
+	if baseline.Code != http.StatusOK {
+		t.Fatalf("baseline status = %d, want %d", baseline.Code, http.StatusOK)
+	}
+	etag := baseline.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("baseline has no ETag")
+	}
+
+	tests := []struct {
+		name        string
+		values      []string
+		notModified bool
+	}{
+		{name: "absent", values: []string{}},
+		{name: "empty", values: []string{""}},
+		{name: "exact", values: []string{etag}, notModified: true},
+		{name: "weak", values: []string{"W/" + etag}, notModified: true},
+		{name: "whitespace", values: []string{" \tW/" + etag + "\t "}, notModified: true},
+		{name: "different", values: []string{`"different"`}},
+		{name: "different weak", values: []string{`W/"different"`}},
+		{name: "case sensitive", values: []string{strings.ToUpper(etag)}},
+		{name: "list first", values: []string{etag + `, "different"`}, notModified: true},
+		{name: "list last", values: []string{`"different", ` + etag}, notModified: true},
+		{name: "list weak", values: []string{`"different", W/` + etag + `, "other"`}, notModified: true},
+		{name: "list different", values: []string{`"different", W/"other"`}},
+		{name: "repeated headers", values: []string{`"different"`, "W/" + etag}, notModified: true},
+		{name: "comma in opaque tag", values: []string{`"different,tag", ` + etag}, notModified: true},
+		{name: "empty list elements", values: []string{", , " + etag + ",,"}, notModified: true},
+		{name: "wildcard", values: []string{"*"}, notModified: true},
+		{name: "wildcard whitespace", values: []string{" \t*\t "}, notModified: true},
+		{name: "quoted wildcard", values: []string{`"*"`}},
+		{name: "unterminated tag", values: []string{`"unterminated`}},
+		{name: "missing separator", values: []string{`"different" ` + etag}},
+		{name: "invalid weak prefix", values: []string{"W/ " + etag}},
+		{name: "trailing garbage", values: []string{etag + " garbage"}},
+		{name: "wildcard in list", values: []string{etag + ", *"}},
+		{name: "space in opaque tag", values: []string{`"invalid tag", ` + etag}},
+		{name: "quoted tag fragment", values: []string{`"different,` + etag}},
+	}
+
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		for _, path := range []string{"/feed.json", "/feeds/daily-briefing/feed.json"} {
+			for _, test := range tests {
+				t.Run(method+" "+path+"/"+test.name, func(t *testing.T) {
+					t.Parallel()
+
+					request := httptest.NewRequest(method, path, nil)
+					for _, value := range test.values {
+						request.Header.Add("If-None-Match", value)
+					}
+					response := httptest.NewRecorder()
+					handler.ServeHTTP(response, request)
+
+					status := http.StatusOK
+					if test.notModified {
+						status = http.StatusNotModified
+					}
+					if response.Code != status {
+						t.Fatalf("status = %d, want %d", response.Code, status)
+					}
+					for _, header := range []string{"ETag", "Cache-Control"} {
+						if response.Header().Get(header) != baseline.Header().Get(header) {
+							t.Errorf(
+								"%s = %q, want %q",
+								header,
+								response.Header().Get(header),
+								baseline.Header().Get(header),
+							)
+						}
+					}
+					body := baseline.Body.String()
+					if method == http.MethodHead || test.notModified {
+						body = ""
+					}
+					if response.Body.String() != body {
+						t.Errorf("body = %q, want %q", response.Body.String(), body)
+					}
+				})
+			}
+		}
+	}
+}
+
 func testFeed(context.Context, *entry.Feed) ([]byte, error) {
 	return []byte(`{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[]}`), nil
 }
