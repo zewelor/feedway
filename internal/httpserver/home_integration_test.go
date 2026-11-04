@@ -4,6 +4,7 @@ package httpserver
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -92,10 +93,26 @@ func TestHomepageLifecycle(t *testing.T) {
 		}
 		return body
 	}
+	readFeed := func(path string) {
+		t.Helper()
+		body, _ := request(http.MethodGet, path, "", http.StatusOK)
+		var result struct {
+			HomePageURL string `json:"home_page_url"`
+			FeedURL     string `json:"feed_url"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			t.Fatal(err)
+		}
+		if result.HomePageURL != "https://feed.example.com/" || result.FeedURL != "https://feed.example.com"+path {
+			t.Fatalf("feed URL metadata for %s = %+v", path, result)
+		}
+	}
 	if body := readHome([]homeLink{}); !strings.Contains(string(body), "No feeds yet.") {
 		t.Fatalf("empty homepage = %s", body)
 	}
 	request(http.MethodPost, "/api/v1/entries", `{"content_html":"<p>Unassigned</p>"}`, http.StatusCreated)
+	readFeed("/feed.json")
+	readFeed("/feeds/daily-briefing/feed.json")
 	readHome([]homeLink{})
 	// Publish out of order, with multiple entries belonging to one feed.
 	for _, publication := range []string{
@@ -116,8 +133,9 @@ func TestHomepageLifecycle(t *testing.T) {
 	}
 	t.Logf("homepage preview: %s", artifact)
 	for _, link := range want {
-		request(http.MethodGet, link.URL, "", http.StatusOK)
+		readFeed(link.URL)
 	}
+	readFeed("/feed.json")
 	request(http.MethodGet, "/missing", "", http.StatusNotFound)
 	request(http.MethodGet, "/missing/nested", "", http.StatusNotFound)
 	_, headers := request(http.MethodPost, "/", "", http.StatusMethodNotAllowed)

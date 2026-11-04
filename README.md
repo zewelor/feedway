@@ -69,7 +69,8 @@ shortcuts, and notifications. Each tool keeps doing one job well.
   and links to their JSON Feeds;
 - serves a minimal public HTML page for each retained entry;
 - accepts optional `data_json` alongside HTML and exposes it as a public JSON attachment;
-- supports absolute entry permalinks through an optional `BASE_URL`;
+- supports absolute entry permalinks and feed URL metadata through an optional
+  `BASE_URL`;
 - assigns new entries opaque UUIDv7 IDs and deduplicates retries by content
   within the selected feed;
 - sanitizes HTML with Bluemonday's conservative UGC policy;

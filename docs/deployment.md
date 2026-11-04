@@ -82,7 +82,7 @@ Only values that differ between deployment environments are configurable:
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
 | `API_TOKEN` | yes | — | 64-character hexadecimal Bearer token |
-| `BASE_URL` | no | — | Public Feedway URL used for absolute entry permalinks |
+| `BASE_URL` | no | — | Public origin for absolute permalinks and feed URL metadata |
 | `DB_PASSWORD` | yes | — | PostgreSQL password |
 | `DB_HOST` | yes | — | PostgreSQL host |
 | `DB_PORT` | no | `5432` | PostgreSQL port |
@@ -100,7 +100,9 @@ openssl rand -hex 32
 ```
 
 Set `BASE_URL` to Feedway's public origin, for example
-`https://feed.example.com`. A trailing slash is ignored. When it is unset,
+`https://feed.example.com`. A trailing slash is ignored. With it configured,
+feeds advertise their own absolute `feed_url` and a shared `home_page_url`
+pointing to `/`. When it is unset, these two metadata fields are omitted and
 entry and attachment permalinks are relative to the origin root, such as
 `/entries/{id}`, including when a reader requests a feed under `/feeds/{feed}/`.
 

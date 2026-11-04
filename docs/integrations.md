@@ -77,6 +77,10 @@ links to `https://feed.example.com/entries/{id}`. Without `BASE_URL`, Feedway
 uses an origin-root-relative `/entries/{id}` permalink, including from the
 nested feed URL.
 
+With `BASE_URL` set, each feed also advertises its own absolute `feed_url`.
+The shared `home_page_url` points to the Feedway home page at `/`, where users
+can browse available feeds. Without `BASE_URL`, both metadata fields are omitted.
+
 Entries with `data_json` advertise an `application/json` attachment pointing to
 `/entries/{id}/data.json`, using `BASE_URL` when configured. Without it, this
 URL is also origin-root-relative. A machine consumer

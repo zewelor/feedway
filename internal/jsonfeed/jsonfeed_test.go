@@ -75,6 +75,60 @@ func TestMarshalReportsTruncation(t *testing.T) {
 	}
 }
 
+func TestMarshalFeedURLs(t *testing.T) {
+	t.Parallel()
+
+	for _, baseURL := range []string{"", "https://feed.example.com"} {
+		for _, name := range []string{"", "daily-briefing", "madeira-news"} {
+			t.Run(baseURL+"/"+name, func(t *testing.T) {
+				t.Parallel()
+
+				var selected *entry.Feed
+				path := "/feed.json"
+				if name != "" {
+					parsed, err := entry.ParseFeed(name)
+					if err != nil {
+						t.Fatal(err)
+					}
+					selected = &parsed
+					path = "/feeds/" + name + "/feed.json"
+				}
+				body, err := jsonfeed.Marshal(nil, baseURL, selected, 100, 4096)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var result map[string]json.RawMessage
+				if err := json.Unmarshal(body, &result); err != nil {
+					t.Fatal(err)
+				}
+				for field, want := range map[string]string{
+					"home_page_url": baseURL + "/",
+					"feed_url":      baseURL + path,
+				} {
+					value, found := result[field]
+					if baseURL == "" {
+						if found {
+							t.Errorf("%s must be omitted without BASE_URL: %s", field, value)
+						}
+						continue
+					}
+					if !found {
+						t.Errorf("missing %s", field)
+						continue
+					}
+					var got string
+					if err := json.Unmarshal(value, &got); err != nil {
+						t.Fatal(err)
+					}
+					if got != want {
+						t.Errorf("%s = %s, want %q", field, value, want)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestMarshalEntries(t *testing.T) {
 	t.Parallel()
 
@@ -98,7 +152,8 @@ func TestMarshalEntries(t *testing.T) {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 
-	const want = `{"version":"https://jsonfeed.org/version/1.1","title":"Feedway","items":[` +
+	const want = `{"version":"https://jsonfeed.org/version/1.1","title":"Feedway",` +
+		`"home_page_url":"https://feed.example.com/","feed_url":"https://feed.example.com/feed.json","items":[` +
 		`{"id":"sha256-v1:first","url":"https://feed.example.com/entries/sha256-v1:first",` +
 		`"title":"Daily report",` +
 		`"content_html":"\u003cp\u003efirst\u003c/p\u003e",` +
@@ -133,19 +188,39 @@ func TestMarshalUsesRelativeEntryURLWithoutBaseURL(t *testing.T) {
 
 func TestMarshalByteBoundaries(t *testing.T) {
 	t.Parallel()
+	for _, baseURL := range []string{"", "https://feed.example.com"} {
+		for _, name := range []string{"", "daily-briefing"} {
+			t.Run(baseURL+"/"+name, func(t *testing.T) {
+				t.Parallel()
+				var selected *entry.Feed
+				if name != "" {
+					parsed, err := entry.ParseFeed(name)
+					if err != nil {
+						t.Fatal(err)
+					}
+					selected = &parsed
+				}
+				testMarshalByteBoundaries(t, baseURL, selected)
+			})
+		}
+	}
+}
+
+func testMarshalByteBoundaries(t *testing.T, baseURL string, selected *entry.Feed) {
+	t.Helper()
 	entries := []entry.Published{
 		{ID: "first", ContentHTML: mustParseHTML(t, "<p>first</p>")},
 		{ID: "second", ContentHTML: mustParseHTML(t, "<p>second</p>")},
 	}
-	first, err := jsonfeed.Marshal(entries[:1], "", nil, 200, 4096)
+	first, err := jsonfeed.Marshal(entries[:1], baseURL, selected, 200, 4096)
 	if err != nil {
 		t.Fatal(err)
 	}
-	complete, err := jsonfeed.Marshal(entries, "", nil, 200, 4096)
+	complete, err := jsonfeed.Marshal(entries, baseURL, selected, 200, 4096)
 	if err != nil {
 		t.Fatal(err)
 	}
-	exact, err := jsonfeed.Marshal(entries, "", nil, 200, len(complete))
+	exact, err := jsonfeed.Marshal(entries, baseURL, selected, 200, len(complete))
 	if err != nil || string(exact) != string(complete) {
 		t.Fatalf("complete feed at exact byte limit: error = %v, body = %s", err, exact)
 	}
@@ -161,7 +236,7 @@ func TestMarshalByteBoundaries(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			body, err := jsonfeed.Marshal(entries, "", nil, 200, test.limit)
+			body, err := jsonfeed.Marshal(entries, baseURL, selected, 200, test.limit)
 			if err != nil {
 				t.Fatal(err)
 			}

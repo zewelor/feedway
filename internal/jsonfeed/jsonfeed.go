@@ -11,10 +11,12 @@ import (
 const version = "https://jsonfeed.org/version/1.1"
 
 type feed struct {
-	Version  string   `json:"version"`
-	Title    string   `json:"title"`
-	Items    []item   `json:"items"`
-	Metadata metadata `json:"_feedway"`
+	Version     string   `json:"version"`
+	Title       string   `json:"title"`
+	HomePageURL string   `json:"home_page_url,omitempty"`
+	FeedURL     string   `json:"feed_url,omitempty"`
+	Items       []item   `json:"items"`
+	Metadata    metadata `json:"_feedway"`
 }
 
 type metadata struct {
@@ -45,18 +47,24 @@ func Marshal(
 		return nil, errors.New("maximum feed entries must be positive")
 	}
 	items := make([]item, 0, min(len(entries), maxItems))
-	title := "Feedway"
+	document := feed{Version: version, Title: "Feedway"}
+	path := "/feed.json"
 	if selected != nil {
-		title = selected.String()
+		document.Title = selected.String()
+		path = "/feeds/" + selected.String() + "/feed.json"
 	}
-	empty, err := marshal(items, title, false)
+	if baseURL != "" {
+		document.HomePageURL = baseURL + "/"
+		document.FeedURL = baseURL + path
+	}
+	empty, err := document.marshal(items, false)
 	if err != nil {
 		return nil, err
 	}
 	if len(empty) > maxBytes {
 		return nil, errors.New("maximum feed size is smaller than an empty feed")
 	}
-	truncatedEmpty, err := marshal(items, title, true)
+	truncatedEmpty, err := document.marshal(items, true)
 	if err != nil {
 		return nil, err
 	}
@@ -104,14 +112,11 @@ func Marshal(
 		itemBytes = candidateBytes
 	}
 
-	return marshal(items, title, truncated)
+	return document.marshal(items, truncated)
 }
 
-func marshal(items []item, title string, truncated bool) ([]byte, error) {
-	return json.Marshal(feed{
-		Version:  version,
-		Title:    title,
-		Items:    items,
-		Metadata: metadata{Truncated: truncated},
-	})
+func (f feed) marshal(items []item, truncated bool) ([]byte, error) {
+	f.Items = items
+	f.Metadata.Truncated = truncated
+	return json.Marshal(f)
 }

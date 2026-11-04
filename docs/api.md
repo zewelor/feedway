@@ -228,10 +228,18 @@ The aggregate response is [JSON Feed 1.1](https://www.jsonfeed.org/version/1.1/)
 with the title `Feedway`. It includes every retained entry, whether assigned to
 a feed identifier or unassigned. Entries are newest first, up to
 `FEED_RESPONSE_MAX_ENTRIES` (100 by default) and subject to the byte limit.
-The top-level object contains `version`, `title`, `_feedway`, and `items`; each
+The top-level object contains `version`, `title`, `_feedway`, and `items`, plus
+`home_page_url` and `feed_url` when `BASE_URL` is set. Each
 item contains `id`, `url`, `content_html`, `date_published`, and
 an optional `title`. When `BASE_URL` is set, `url` is an absolute public
 permalink; otherwise it is relative to the origin root, such as `/entries/{id}`.
+
+With `BASE_URL=https://feed.example.com`, the aggregate feed advertises
+`home_page_url: "https://feed.example.com/"` and
+`feed_url: "https://feed.example.com/feed.json"`. Both fields are omitted when
+`BASE_URL` is unset. Feedway uses the configured public origin rather than the
+request's host or forwarded headers. URL metadata is included even in empty
+feeds and counts toward the 4 MiB limit and the response ETag.
 
 ### `GET /feeds/{feed}/feed.json`
 
@@ -247,6 +255,11 @@ The filtered and aggregate routes use the same response headers, ETag,
 conditional-request behavior, and truncation signal. The feed title makes the
 representations distinct. With `BASE_URL` unset, item and attachment URLs stay
 origin-root-relative even though this feed URL is nested under `/feeds/`.
+
+When `BASE_URL` is set, a filtered feed advertises its own absolute `feed_url`,
+such as `https://feed.example.com/feeds/daily-briefing/feed.json`.
+All feeds share the same `home_page_url`, pointing to the existing home page
+at `https://feed.example.com/`. There is no separate HTML page for each feed.
 
 An item with structured data also contains one standard `attachments` entry:
 
@@ -272,6 +285,8 @@ Example:
 {
   "version": "https://jsonfeed.org/version/1.1",
   "title": "Feedway",
+  "home_page_url": "https://feed.example.com/",
+  "feed_url": "https://feed.example.com/feed.json",
   "items": [
     {
       "id": "0190abcd-1234-7abc-8def-0123456789ab",
