@@ -37,7 +37,8 @@ small public surface, and few operator decisions.
 
 ## Dependencies
 
-- Stay within Go 1.26.x, PostgreSQL 18.x, pgx/v5, and Bluemonday.
+- Use the latest stable Go release unless a documented project requirement justifies an exception.
+- Stay within PostgreSQL 18.x, pgx/v5, and Bluemonday.
 - Before changing a module, tool, image, or GitHub Action, verify the latest stable upstream release. Do not use
   prereleases without explicit approval.
 - Use Context7 for current upstream documentation before dependency or external-API work.
@@ -45,7 +46,7 @@ small public surface, and few operator decisions.
   `ghcr.io/zewelor/feedway:latest`; CI also publishes a full-commit-SHA tag.
 - Reference GitHub Actions by major tag, for example `actions/checkout@v7`.
 - Record Go tools with `go get -tool`. Justify every additional runtime dependency in review.
-- For a Go patch upgrade, verify the latest stable official `golang:<version>-trixie` multi-platform image, update its
+- For a Go upgrade, verify the latest stable official `golang:<version>-trixie` multi-platform image, update its
   version and index digest together in `Dockerfile`, and run `just ci`, including `govulncheck`. Publishing is a
   separately authorized sequence: commit and push to `main`, wait for CI to publish the commit-SHA image, create the
   Feedway version tag and GitHub Release at that green commit, then update GitOps to the published image digest.
