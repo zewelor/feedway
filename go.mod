@@ -3,7 +3,7 @@ module github.com/zewelor/feedway
 go 1.27.4
 
 require (
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 )
 
