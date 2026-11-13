@@ -5,18 +5,23 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   ci:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
-
+        with:
+          persist-credentials: false
       - name: Install just
         uses: taiki-e/install-action@v2
         with:
@@ -38,6 +43,34 @@ jobs:
       - name: Run tests and static checks
         run: just ci-checks no
 
+      - name: Build production image for pull requests
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ runner.arch == 'ARM64' && 'linux/arm64' || 'linux/amd64' }}
+          push: false
+          cache-from: |
+            type=gha,scope=production
+            type=gha,scope=ci
+
+  publish:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v6
@@ -50,7 +83,6 @@ jobs:
             latest=true
 
       - name: Log in to GHCR
-        if: github.event_name == 'push'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -61,19 +93,11 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          # PRs use the runner's native platform for a faster feedback loop;
-          # only pushes to main pay the cost of producing the multi-arch manifest.
-          # GitHub exposes X64/ARM64 through runner.arch; map those names to
-          # Docker's amd64/arm64 names while keeping the platform inline.
-          # Lowercasing alone is not enough: Docker calls X64 "amd64", not "x64".
-          platforms: ${{ github.event_name == 'push' && 'linux/amd64,linux/arm64' || runner.arch == 'ARM64' && 'linux/arm64' || 'linux/amd64' }}
-          # Pull requests validate the image; only pushes to main publish it.
-          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64,linux/arm64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
             type=gha,scope=production
             type=gha,scope=ci
-          # PRs consume existing caches but do not write to the shared production
-          # scope, avoiding cache churn from unmerged and potentially transient code.
-          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=production' || '' }}
+          cache-to: type=gha,mode=max,scope=production

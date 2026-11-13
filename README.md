@@ -126,7 +126,7 @@ The example publishes host port 8080 to the container's port 80 and prepares
 the entries table and upgrades its schema automatically at startup. There is no
 migration command to run.
 It uses `ghcr.io/zewelor/feedway:latest`; every green push to `main` also
-publishes an immutable full-commit-SHA image tag.
+publishes an immutable full-commit-SHA image tag, including test-only and documentation-only changes.
 
 For external PostgreSQL or other deployment environments, see the
 [deployment guide](docs/deployment.md).
