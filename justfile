@@ -23,20 +23,20 @@ test-integration:
     trap '{{compose}} down --volumes --remove-orphans' EXIT
     {{compose}} run --build --rm test
 
-# Check repository Markdown without modifying files.
-lint-markdown:
-    {{compose}} run --rm --no-deps markdownlint "**/*.md" "#.agents/**"
+# Check Markdown formatting without modifying files.
+check-markdown:
+    mise exec -- dprint check
 
-# Apply safe automatic fixes to repository Markdown.
+# Format repository Markdown.
 format-markdown:
-    {{compose}} run --rm --no-deps --user "$(id -u):$(id -g)" markdownlint --fix "**/*.md" "#.agents/**"
+    mise exec -- dprint fmt
 
 # Enable the repository-managed native Git hooks.
 hooks-install:
     git config --local core.hooksPath .githooks
 
 # Run tests and static checks without building the production image.
-ci-checks build="yes": lint-markdown
+ci-checks build="yes":
     #!/usr/bin/env bash
     set -euo pipefail
     trap '{{compose}} down --volumes --remove-orphans' EXIT
@@ -52,7 +52,7 @@ ci-checks build="yes": lint-markdown
     '
 
 # Run the complete local CI quality gate.
-ci: ci-checks
+ci: check-markdown ci-checks
     docker build .
 
 # Preview the files included in the Docker build context.

@@ -1,18 +1,4 @@
 services:
-  markdownlint:
-    image: davidanson/markdownlint-cli2:v0.24.2@sha256:c768e94d8bb161c449bde28f60656929ca1f02c3010a405f65c9cac71563a889
-    working_dir: /workdir
-    volumes:
-      - .:/workdir
-    read_only: true
-    network_mode: none
-    tmpfs:
-      - /tmp
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-
   postgres:
     image: postgres:18.7-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a
     environment:

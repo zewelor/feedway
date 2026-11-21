@@ -1,0 +1,31 @@
+name: Markdown formatting
+
+on:
+  push:
+    branches: [main]
+    paths: &markdown_paths
+      - '**.md'
+      - 'docs/**'
+      - .github/workflows/markdown.yaml
+      - dprint.json
+      - .mise.toml
+  pull_request:
+    paths: *markdown_paths
+
+permissions: {}
+
+jobs:
+  format:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install dprint
+        uses: jdx/mise-action@v5
+      - name: Check Markdown formatting
+        run: dprint check

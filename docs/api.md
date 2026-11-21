@@ -11,7 +11,7 @@ An entry may have an optional feed identifier. Identifiers are ASCII slugs of
 1–64 bytes: lower-case letters and digits, separated by single hyphens. They
 cannot start or end with a hyphen or contain consecutive hyphens. Feedway does
 not trim whitespace or fold case. For example, `daily-briefing` is valid;
-`Daily-Briefing`, `daily--briefing`, and ` daily-briefing ` are invalid.
+`Daily-Briefing`, `daily--briefing`, and identifiers with leading or trailing spaces are invalid.
 
 There is no feed registry, display-name metadata, or feed-management API. A
 producer can use any valid identifier without creating it first. Entries with

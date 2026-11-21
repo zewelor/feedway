@@ -38,8 +38,12 @@ The example publishes the container's port 80 as host port 8080 and persists
 PostgreSQL data in the `postgres-data` volume. Feedway creates and upgrades the
 `entries` table automatically at startup; there is no migration command to run.
 
-The example uses `ghcr.io/zewelor/feedway:latest`. Every green push to `main`
-also publishes an immutable full-commit-SHA image tag.
+The example uses `ghcr.io/zewelor/feedway:latest`. Each successful `CI` run on
+`main` also publishes an immutable full-commit-SHA image tag. Pushes limited to
+Markdown files, `docs/`, dprint configuration, or the Markdown workflow itself
+run only the Markdown formatting check.
+On mixed pushes, the image is published after CI succeeds, independently of the
+Markdown formatting result.
 
 ## Configuration
 

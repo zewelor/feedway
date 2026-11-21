@@ -11,6 +11,7 @@
     "dockerfile",
     "github-actions",
     "gomod",
+    "mise",
   ],
   "dependencyDashboard": true,
   "ignoreDeps": ["ghcr.io/zewelor/feedway"],

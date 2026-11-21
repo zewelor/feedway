@@ -74,7 +74,8 @@ shortcuts, and notifications. Each tool keeps doing one job well.
 - assigns new entries opaque UUIDv7 IDs and deduplicates retries by content
   within the selected feed;
 - sanitizes HTML with Bluemonday's conservative UGC policy;
-- keeps up to the latest 100 entries by default, configurable with `FEED_RESPONSE_MAX_ENTRIES`, within the 4 MiB feed limit;
+- keeps up to the latest 100 entries by default, configurable with `FEED_RESPONSE_MAX_ENTRIES`, within the 4 MiB feed
+  limit;
 - signals when those feed limits omit older entries still stored in the database;
 - deletes database entries after 30 days by default;
 - supports ETag, conditional requests, `GET`, and `HEAD`;
@@ -122,11 +123,9 @@ docker compose ps
 curl --fail http://localhost:8080/readyz
 ```
 
-The example publishes host port 8080 to the container's port 80 and prepares
-the entries table and upgrades its schema automatically at startup. There is no
-migration command to run.
-It uses `ghcr.io/zewelor/feedway:latest`; every green push to `main` also
-publishes an immutable full-commit-SHA image tag, including test-only and documentation-only changes.
+The example uses `ghcr.io/zewelor/feedway:latest` and publishes the container's
+port 80 as host port 8080. Feedway creates and upgrades the entries table
+automatically at startup.
 
 For external PostgreSQL or other deployment environments, see the
 [deployment guide](docs/deployment.md).
@@ -178,28 +177,32 @@ They are not an active roadmap.
 
 ## 🧪 Development
 
-All tests and quality tools run inside Docker:
+To run the Go tests from a fresh checkout, install Docker with Compose and
+`just` (`mise` is not required), then run from the repository root:
 
 ```bash
-just hooks-install
-just format-markdown
-just lint-markdown
 just test
+```
+
+For Markdown formatting checks and the complete local CI gate, also install
+`mise` and make it available on `PATH`, then install the pinned dprint version:
+
+```bash
+mise install
+just check-markdown
 just ci
 ```
 
-Run `just hooks-install` once after cloning. It configures Git's repository-local
-`core.hooksPath` to use the tracked `.githooks/`; no additional hook manager is
-required.
+`just format-markdown` and `just check-markdown` use the dprint version in
+`.mise.toml` and the rules in `dprint.json`. The recipes call `mise exec`, so they
+work without shell activation. Editors that call dprint directly can use
+[mise shims](https://mise.jdx.dev/dev-tools/shims.html).
 
-The pre-push hook runs the complete `just ci` gate before every push. GitHub
-Actions runs the same gate again, so local hooks provide fast feedback without
-replacing the authoritative remote check.
+`just ci` runs the complete local gate: Markdown formatting, Go tests and static
+checks, and the production image build. To run it before each push, optionally
+enable the tracked hook with `just hooks-install`.
 
-`just format-markdown` applies safe automatic Markdown fixes. Long prose lines
-reported by `just lint-markdown` still need to be wrapped manually. `just test`
-is the package acceptance gate. `just ci` additionally checks Markdown and Go
-formatting, modules, vet, golangci-lint, govulncheck, and the production image.
+`just test` is the package acceptance gate.
 
 ## 📄 License
 
