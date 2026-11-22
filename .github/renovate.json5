@@ -5,6 +5,7 @@
     "docker:pinDigests",
     "github>zewelor/renovate-config//presets/github-actions",
     "github>zewelor/renovate-config//presets/go",
+    "github>zewelor/renovate-config//presets/postgresql-18",
   ],
   "enabledManagers": [
     "docker-compose",
@@ -17,12 +18,6 @@
   "ignoreDeps": ["ghcr.io/zewelor/feedway"],
   "ignorePaths": [".agents/**"],
   "packageRules": [
-    {
-      "description": "Keep PostgreSQL on major version 18",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["postgres"],
-      "allowedVersions": "/^18(?:\\.|$)/",
-    },
     {
       "description": "Automerge non-major Go and Docker updates",
       "matchManagers": ["docker-compose", "dockerfile", "gomod"],
