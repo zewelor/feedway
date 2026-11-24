@@ -14,7 +14,9 @@
     "gomod",
     "mise",
   ],
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "ignoreDeps": ["ghcr.io/zewelor/feedway"],
   "ignorePaths": [".agents/**"],
   "packageRules": [
