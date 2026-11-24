@@ -45,6 +45,10 @@ run only the Markdown formatting check.
 On mixed pushes, the image is published after CI succeeds, independently of the
 Markdown formatting result.
 
+GHCR cleanup runs on the first of each month at 03:41 UTC under the same
+package lock. It protects `latest` and images from the last 60 days, plus the
+10 newest older tagged versions. Manual cleanup defaults to a dry run.
+
 ## Configuration
 
 ### Upgrading an existing database
