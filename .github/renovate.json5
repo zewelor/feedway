@@ -17,6 +17,8 @@
   "dependencyDashboard": {
     "enabled": true
   },
+  "automergeType": "branch",
+  "platformAutomerge": false,
   "ignoreDeps": ["ghcr.io/zewelor/feedway"],
   "ignorePaths": [".agents/**"],
   "packageRules": [
