@@ -37,7 +37,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -p \"$$POSTGRES_PORT\"",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\" -p \"$$POSTGRES_PORT\"",
         ]
       interval: 10s
       timeout: 5s

@@ -1,26 +1,10 @@
-# Ignore all hidden files and directories (.git, .github, .vscode, .env)
-.*
-
-# Documentation and repository config
-*.md
-docs/
-/*.toml
-/*.yml
-/*.yaml
-/*.json
-Dockerfile*
-justfile
-
-# Local binaries, test artifacts, and build outputs
-*.test
-*.prof
-tmp/
-dist/
-coverage/
-*.log
-data/
-
-# NOTE: Do NOT ignore *_test.go files here! (Required by Dockerfile validate stage)
-
-# Local binary
-feedway
+**
+!go.mod
+!go.sum
+!LICENSE
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+**/*_test.go
+**/testdata

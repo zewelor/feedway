@@ -2,24 +2,77 @@ name: CI
 
 on:
   push:
-    branches: [main]
-    paths-ignore: &markdown_paths
-      - '**.md'
-      - 'docs/**'
-      - .github/workflows/markdown.yaml
-      - dprint.json
-      - .mise.toml
+    branches: [main, 'renovate/**']
   pull_request:
-    paths-ignore: *markdown_paths
 
 permissions: {}
 
+# Let main runs reach verification independently. Serialize writes in the publisher.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch) && github.run_id || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  ci:
+  changes:
+    if: >-
+      github.event_name == 'pull_request' ||
+      (!github.event.deleted && startsWith(github.event.ref, 'refs/heads/renovate/'))
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      verify: ${{ steps.paths.outputs.verify }}
+      image: ${{ steps.paths.outputs.image }}
+      markdown: ${{ steps.paths.outputs.markdown }}
+    steps:
+      - name: Check out Renovate revision
+        if: github.event_name == 'push'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed inputs
+        id: paths
+        uses: dorny/paths-filter@v4
+        with:
+          # For branch pushes, compare the checked-out revision to the merge base with main.
+          ref: ${{ github.sha }}
+          predicate-quantifier: some-with-excludes
+          filters: |
+            verify:
+              - 'cmd/**'
+              - 'internal/**'
+              - 'go.{mod,sum}'
+              - 'tools/**'
+              - 'justfile'
+              - 'compose.test.yaml'
+              - '.github/workflows/ci.yaml'
+            image:
+              - 'cmd/**'
+              - 'internal/**'
+              - 'go.{mod,sum}'
+              - 'LICENSE'
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'compose.dev.yaml'
+              - '.github/workflows/ci.yaml'
+              - '!**/*_test.go'
+              - '!**/testdata/**'
+            markdown:
+              - '**/*.md'
+              - 'docs/**'
+              - '.github/workflows/markdown.yaml'
+              - 'dprint.json'
+              - '.mise.toml'
+
+  verify:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && !github.event.deleted && (needs.changes.result == 'skipped' ||
+      (needs.changes.result == 'success' && needs.changes.outputs.verify == 'true')) }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -29,87 +82,151 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
       - name: Install just
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends just
-          just --version
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      - name: Run tests and static checks
+        run: just ci-checks
+
+  build:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && !github.event.deleted && (needs.changes.result == 'skipped' ||
+      (needs.changes.result == 'success' && needs.changes.outputs.image == 'true')) }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Build CI image
+      - name: Build native smoke image
         uses: docker/build-push-action@v7
         with:
           context: .
-          target: ci
+          platforms: linux/amd64
           load: true
-          tags: feedway-ci:latest
-          cache-from: type=gha,scope=ci
-          cache-to: type=gha,mode=max,scope=ci
+          tags: feedway-smoke-feedway:latest
+          cache-from: type=gha,scope=production
 
-      - name: Run tests and static checks
-        run: just ci-checks no
+      - name: Smoke-test production image with PostgreSQL
+        env:
+          API_TOKEN: '0000000000000000000000000000000000000000000000000000000000000000'
+          DB_PASSWORD: feedway_smoke
+        run: |
+          compose=(docker compose -f compose.dev.yaml -p feedway-smoke)
+          trap '"${compose[@]}" down --volumes' EXIT
+          if ! "${compose[@]}" up --no-build --wait --wait-timeout 60 ||
+             ! curl --fail --silent --show-error --retry 10 --retry-connrefused --retry-delay 1 \
+               --max-time 2 http://127.0.0.1:8080/readyz; then
+            "${compose[@]}" logs
+            exit 1
+          fi
 
-      - name: Build production image for pull requests
-        if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: ${{ runner.arch == 'ARM64' && 'linux/arm64' || 'linux/amd64' }}
-          push: false
-          cache-from: |
-            type=gha,scope=production
-            type=gha,scope=ci
+  markdown:
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.markdown == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/markdown.yaml
 
   publish:
+    needs: [verify, build]
+    if: >-
+      github.event_name == 'push' && !github.event.deleted &&
+      github.event.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     concurrency:
       group: ghcr-${{ github.repository }}
       queue: max
       cancel-in-progress: false
-    needs: ci
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
       contents: read
       packages: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
     steps:
+      - name: Check current default branch under the package lock
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$GITHUB_REF_NAME" --jq .object.sha)
+          if [[ "$GITHUB_SHA" == "$tip" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping superseded commit $GITHUB_SHA (current tip: $tip)."
+          fi
+
       - name: Check out repository
+        if: &publish_current steps.current.outputs.publish == 'true'
         uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Set up Docker Buildx
+        if: *publish_current
         uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: image=moby/buildkit:v0.35.1@sha256:baf6138eb8c37644800c7c913fba051e840ebb9ba13eaf92d92ef9a1712d0b4c
 
-      - name: Docker meta
+      - name: Generate image tags
+        if: *publish_current
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
           tags: |
-            # full length sha
+            type=raw,value=latest
             type=sha,format=long,prefix=
-          flavor: |
-            latest=true
 
       - name: Log in to GHCR
+        if: *publish_current
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push production image
+      - name: Publish multi-arch image
+        if: *publish_current
+        id: image
         uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          outputs: type=image,push=true,oci-mediatypes=true,rewrite-timestamp=true
+          build-args: SOURCE_DATE_EPOCH=0
+          # Per-build provenance in the index would change the digest for identical inputs.
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: |
-            type=gha,scope=production
-            type=gha,scope=ci
-          cache-to: type=gha,mode=max,scope=production
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=production
+          cache-to: type=gha,scope=production,mode=max
+
+      - name: Record published digest
+        if: *publish_current
+        env:
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          printf 'Published %s@%s from %s ([run](%s/%s/actions/runs/%s)).\n' \
+            "$IMAGE" "$DIGEST" "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> "$GITHUB_STEP_SUMMARY"

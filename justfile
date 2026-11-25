@@ -1,27 +1,22 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
-compose := "docker compose -f compose.test.yaml -p feedway-test"
-
-# Run the complete test suite against ephemeral PostgreSQL.
+# Run the complete suite against a fresh PostgreSQL instance on loopback.
 test:
     #!/usr/bin/env bash
     set -euo pipefail
-    trap '{{compose}} down --volumes --remove-orphans' EXIT
-    {{compose}} run --build --rm test
+    # Hold the loopback port through teardown, including across checkouts.
+    exec 9>>"/tmp/feedway-test-${UID}.lock"
+    flock 9
+    compose=(docker compose -f compose.test.yaml -p "feedway-test-$$")
+    trap '"${compose[@]}" down --volumes --remove-orphans' EXIT
+    "${compose[@]}" up --wait --wait-timeout 60 postgres
+    go test -count=1 -race -tags=integration ./...
 
 # Run tests that do not require PostgreSQL.
 test-unit:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    trap '{{compose}} down --volumes --remove-orphans' EXIT
-    {{compose}} run --build --rm --no-deps test go test -race ./...
+    go test -race ./...
 
-# Run all tests, including integration tests, against ephemeral PostgreSQL.
-test-integration:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    trap '{{compose}} down --volumes --remove-orphans' EXIT
-    {{compose}} run --build --rm test
+alias test-integration := test
 
 # Check Markdown formatting without modifying files.
 check-markdown:
@@ -36,20 +31,14 @@ hooks-install:
     git config --local core.hooksPath .githooks
 
 # Run tests and static checks without building the production image.
-ci-checks build="yes":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    trap '{{compose}} down --volumes --remove-orphans' EXIT
-    build_flag=""
-    if [[ "{{build}}" == "yes" ]]; then build_flag="--build"; fi
-    {{compose}} run $build_flag --rm test sh -ec '
-        go test -race -tags=integration ./...
-        unformatted="$(find cmd internal -type f -name "*.go" -exec gofmt -l {} +)"
-        test -z "$unformatted" || { echo "$unformatted"; exit 1; }
-        go vet -tags=integration ./...
-        golangci-lint run --build-tags=integration
-        govulncheck ./...
-    '
+ci-checks: test
+    go mod verify
+    go mod tidy -diff
+    (cd tools && go mod verify && go mod tidy -diff)
+    unformatted="$(find cmd internal -type f -name '*.go' -exec gofmt -l {} +)"; test -z "$unformatted" || { echo "$unformatted"; exit 1; }
+    go vet -tags=integration ./...
+    go tool -modfile=tools/go.mod golangci-lint run --build-tags=integration
+    go tool -modfile=tools/go.mod govulncheck ./...
 
 # Run the complete local CI quality gate.
 ci: check-markdown ci-checks

@@ -9,8 +9,8 @@ import (
 )
 
 var testConfig = Config{
-	Host:     "postgres",
-	Port:     5432,
+	Host:     "127.0.0.1",
+	Port:     15432,
 	Name:     "feedway_test",
 	User:     "feedway",
 	Password: "feedway_test",

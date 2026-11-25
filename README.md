@@ -177,8 +177,11 @@ They are not an active roadmap.
 
 ## 🧪 Development
 
-To run the Go tests from a fresh checkout, install Docker with Compose and
-`just` (`mise` is not required), then run from the repository root:
+Install the Go toolchain specified in `go.mod`, a C compiler for the race detector,
+a local Docker context with Compose, `just`, and `flock`. Run `just test-unit`
+for a quick check without PostgreSQL. The full suite needs a free
+`127.0.0.1:15432` and runs against a disposable test database. Concurrent test
+runs by the same user wait for the port, including across checkouts:
 
 ```bash
 just test

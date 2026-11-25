@@ -6,33 +6,11 @@ services:
       POSTGRES_PASSWORD: feedway_test
       POSTGRES_USER: feedway
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U feedway -d feedway_test"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U feedway -d feedway_test"]
       interval: 1s
       timeout: 5s
       retries: 30
     tmpfs:
       - /var/lib/postgresql
-
-  test:
-    image: feedway-ci:latest
-    build:
-      context: .
-      target: ci
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_NAME: feedway_test
-      DB_PASSWORD: feedway_test
-      DB_PORT: 5432
-      DB_USER: feedway
-      GOCACHE: /tmp/go-build
-      GOLANGCI_LINT_CACHE: /tmp/golangci-lint
-    read_only: true
-    tmpfs:
-      - /tmp:exec,mode=1777
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:15432:5432"

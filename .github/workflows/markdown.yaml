@@ -11,6 +11,7 @@ on:
       - .mise.toml
   pull_request:
     paths: *markdown_paths
+  workflow_call:
 
 permissions: {}
 

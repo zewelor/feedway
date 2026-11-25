@@ -68,7 +68,8 @@ small public surface, and few operator decisions.
 
 - After approval, run the required formatters and linters, then `just test`. Use `just ci` for the complete local gate;
   GitHub Actions remains authoritative after a push.
-- Run Go tooling through the project Docker image, orchestrated by `just` or Docker Compose, never directly on the host.
+- Run Go tests and checks from the checkout with the project toolchain. Use `just test` for the isolated Compose
+  database.
 - After changing the root file layout, run `just show_dockerignore` and exclude files the image build does not need.
 
 ## Git output

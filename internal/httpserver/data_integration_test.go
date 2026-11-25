@@ -18,7 +18,7 @@ import (
 )
 
 var dataTestConfig = database.Config{
-	Host: "postgres", Port: 5432, Name: "feedway_http_test",
+	Host: "127.0.0.1", Port: 15432, Name: "feedway_http_test",
 	User: "feedway", Password: "feedway_test", SSLMode: "disable",
 }
 

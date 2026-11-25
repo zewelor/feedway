@@ -38,12 +38,32 @@ The example publishes the container's port 80 as host port 8080 and persists
 PostgreSQL data in the `postgres-data` volume. Feedway creates and upgrades the
 `entries` table automatically at startup; there is no migration command to run.
 
-The example uses `ghcr.io/zewelor/feedway:latest`. Each successful `CI` run on
-`main` also publishes an immutable full-commit-SHA image tag. Pushes limited to
-Markdown files, `docs/`, dprint configuration, or the Markdown workflow itself
-run only the Markdown formatting check.
-On mixed pushes, the image is published after CI succeeds, independently of the
-Markdown formatting result.
+### CI and image publication
+
+On pull requests and pushes to `renovate/**`, application sources, Go
+modules, test fixtures, tools, and the justfile trigger Go checks. Image inputs,
+including embedded SQL and HTML, and the development Compose file trigger an
+amd64 build and a smoke test of `/readyz` with PostgreSQL. Changes to the CI
+workflow trigger both jobs. For a Renovate push, CI checks the entire branch
+diff from its merge base with `main`. Renovate can merge eligible updates
+directly into `main` after the checks pass and can open a pull request when
+checks fail or stay pending.
+
+Markdown formatting runs independently when Markdown, documentation, dprint
+configuration, mise configuration, or the Markdown workflow changes.
+
+Every push to `main` runs Go checks and the image smoke test. A green push can
+therefore deliver an application change from an earlier failed run, even if the
+new push only repairs a test. Under the GHCR package lock, the publisher compares
+the verified commit with the current tip of `main`. Superseded runs skip
+publication, including on reruns.
+
+The publisher builds an amd64/arm64 image and tags it with `latest` and the
+full commit SHA. The Actions summary records the commit, image digest, and run
+link. To keep the OCI index digest stable across builds with identical image
+inputs, the publisher pins BuildKit, normalizes timestamps, uses a fixed source
+label, and disables BuildKit's per-build provenance in the index. Deployments
+can pin the published digest.
 
 GHCR cleanup runs on the first of each month at 03:41 UTC under the same
 package lock. It protects `latest` and images from the last 60 days, plus the
